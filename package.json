@@ -1,0 +1,22 @@
+{
+  "name": "buscador-archivos",
+  "version": "1.0.0",
+  "description": "Aplicacion de escritorio moderna para busqueda inteligente de archivos PDF en red",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron ."
+  },
+  "keywords": [
+    "electron",
+    "pdf",
+    "search",
+    "files",
+    "stellum"
+  ],
+  "author": "Stellum Team",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^44.4.2"
+  }
+}
