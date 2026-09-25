@@ -6,9 +6,11 @@ const searchEngine = require('./searchEngine');
 let mainWindow = null;
 
 const DEFAULT_CONFIG = {
-  rutaBase: '\\\\172.40.5.84\\irec\\Respaldo_Original',
+  servidorActivo: 'irec',
+  rutaIrec: '\\\\172.40.5.84\\irec',
+  rutaSsdirec: '\\\\172.40.5.84\\ssdirec',
+  rutaBase: '\\\\172.40.5.84\\irec',
   limiteResultados: 200,
-  modoCoincidencia: 'todas',
   profundidadMaxima: 6,
   tiempoLimiteMs: 45000,
   buscarEnRuta: true,
@@ -50,8 +52,9 @@ function createWindow() {
     height: 850,
     minWidth: 1080,
     minHeight: 700,
-    backgroundColor: '#0b0f19',
+    backgroundColor: '#f8fafc',
     title: 'Buscador de Expedientes y Archivos - IREC',
+    icon: path.join(__dirname, 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -61,6 +64,15 @@ function createWindow() {
   });
 
   mainWindow.removeMenu();
+
+  // Habilitar atajos F12 y Ctrl+Shift+I para abrir la consola de desarrollador
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.key === 'F12' || (input.control && input.shift && input.key.toLowerCase() === 'i')) {
+      mainWindow.webContents.toggleDevTools();
+      event.preventDefault();
+    }
+  });
+
   mainWindow.loadFile('index.html');
 
   mainWindow.on('closed', () => {
@@ -84,12 +96,34 @@ ipcMain.handle('buscar-archivos', async (event, options) => {
   }
 });
 
+ipcMain.handle('listar-archivos-iniciales', async (event, options) => {
+  try {
+    return await searchEngine.listarArchivosIniciales(options);
+  } catch (err) {
+    return {
+      ok: false,
+      error: err.message,
+      archivos: [],
+      total: 0
+    };
+  }
+});
+
+ipcMain.handle('obtener-carpetas', async (event, options) => {
+  return await searchEngine.obtenerCarpetas(options);
+});
+
+ipcMain.handle('verificar-servidores', async (event, rutas) => {
+  return await searchEngine.verificarServidores(rutas);
+});
+
 ipcMain.handle('obtener-delegaciones', async (event, rutaBase) => {
   return await searchEngine.obtenerDelegaciones(rutaBase);
 });
 
-ipcMain.handle('obtener-subcarpetas', async (event, { rutaBase, delegacion }) => {
-  return await searchEngine.obtenerSubcarpetas(rutaBase, delegacion);
+ipcMain.handle('obtener-subcarpetas', async (event, args) => {
+  const { rutaBase, delegacion, subruta, rutaCompleta } = args || {};
+  return await searchEngine.obtenerSubcarpetas(rutaBase, delegacion, subruta, rutaCompleta);
 });
 
 ipcMain.handle('verificar-ruta', async (event, ruta) => {
@@ -134,6 +168,10 @@ ipcMain.handle('guardar-config', (event, config) => {
   return guardarConfig(config);
 });
 
+ipcMain.handle('limpiar-memoria', () => {
+  return searchEngine.limpiarMemoria();
+});
+
 ipcMain.handle('seleccionar-carpeta', async () => {
   if (!mainWindow) return null;
   const result = await dialog.showOpenDialog(mainWindow, {
@@ -158,6 +196,11 @@ ipcMain.handle('maximizar-ventana', () => {
       mainWindow.maximize();
     }
   }
+});
+
+ipcMain.handle('toggle-devtools', () => {
+  if (mainWindow) mainWindow.webContents.toggleDevTools();
+  return true;
 });
 
 ipcMain.handle('cerrar-ventana', () => {

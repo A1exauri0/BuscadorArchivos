@@ -1,33 +1,242 @@
 // ==========================================================================
-// RENDERER PROCESS - BUSCADOR DE ARCHIVOS IREC
+// RENDERER PROCESS - BUSCADOR DE ARCHIVOS IREC (SOPORTE DUAL: IREC + SSDIREC)
+// Explorador de Archivos / Apertura Directa PDF / Navbar Limpia
 // ==========================================================================
 
 let currentConfig = {
-  rutaBase: '\\\\172.40.5.84\\irec\\Respaldo_Original',
+  servidorActivo: 'irec',
+  rutaIrec: '\\\\172.40.5.84\\irec',
+  rutaSsdirec: '\\\\172.40.5.84\\ssdirec',
+  rutaBase: '\\\\172.40.5.84\\irec',
   limiteResultados: 200,
-  modoCoincidencia: 'todas',
   profundidadMaxima: 6,
   tiempoLimiteMs: 45000,
   buscarEnRuta: true
 };
 
-let currentDelegacion = '';
-let delegacionesList = [];
+let currentCarpeta = '';
+let currentRutaCompleta = '';
+let carpetasList = [];
 let ultimosResultados = [];
-let activePreviewFile = null;
+let searchChips = [];
+let searchDebounceTimer = null;
+
+// ==========================================================================
+// MEMORIA RAM CACHÉ (ALMACENAMIENTO RÁPIDO PARA RESPUESTAS INSTANTÁNEAS A 0ms)
+// ==========================================================================
+const cacheMemoria = {
+  carpetasRaiz: new Map(), // almacenamiento -> carpetas[]
+  subcarpetas: new Map(),  // rutaBase:::subruta -> subcarpetas[]
+  listados: new Map(),     // alm:::carpeta:::rutaCompleta:::limite -> resultado
+  busquedas: new Map()     // alm:::carpeta:::rutaCompleta:::terminos:::limite -> resultado
+};
+
+function obtenerClaseTamanoTexto(texto) {
+  if (!texto) return '';
+  const len = texto.length;
+  if (len > 30) return 'text-xl';
+  if (len > 20) return 'text-long';
+  return '';
+}
 
 // DOM Elements
+const storageTabs = document.querySelectorAll('.storage-tab');
+const foldersSectionTitle = document.getElementById('folders-section-title');
+const allFoldersLabel = document.getElementById('all-folders-label');
+
+const bcServerBadge = document.getElementById('bc-server-badge');
+const bcFolderName = document.getElementById('bc-folder-name');
+
+const searchBoxWrapper = document.getElementById('search-box-wrapper');
+const searchSuggestionsDropdown = document.getElementById('search-suggestions-dropdown');
+const searchInputBox = document.getElementById('search-input-box');
+const chipsList = document.getElementById('chips-list');
 const searchInput = document.getElementById('search-input');
 const btnExecSearch = document.getElementById('btn-exec-search');
 const btnClearSearch = document.getElementById('btn-clear-search');
 const selectMaxResults = document.getElementById('select-max-results');
-const checkSearchInPath = document.getElementById('check-search-in-path');
-const matchModeBtns = document.querySelectorAll('#match-mode-group .toggle-btn');
+const chkSearchInPath = document.getElementById('chk-search-in-path');
 const activeDelName = document.getElementById('active-del-name');
 
-const delegacionesUl = document.getElementById('delegaciones-list');
+const explorerTree = document.getElementById('explorer-tree');
+const treeRootAll = document.getElementById('tree-root-all');
 const filterDelegacionInput = document.getElementById('filter-delegacion-input');
-const delegacionesCount = document.getElementById('delegaciones-count');
+const btnRefreshTree = document.getElementById('btn-refresh-tree');
+
+function obtenerBusquedasGuardadas() {
+  try {
+    const data = localStorage.getItem('busquedas_recientes_irec');
+    if (data) return JSON.parse(data);
+  } catch (e) {}
+  return [
+    'ENTREGABLES PROCESADOS FINANZAS',
+    '1 ENTREGA REGISTROS',
+    'LIBROS Y SELLOS',
+    '2004 1788'
+  ];
+}
+
+function guardarBusquedasRecientes(lista) {
+  try {
+    localStorage.setItem('busquedas_recientes_irec', JSON.stringify(lista));
+  } catch (e) {}
+}
+
+let busquedasRecientes = obtenerBusquedasGuardadas();
+
+function eliminarBusquedaReciente(texto) {
+  busquedasRecientes = busquedasRecientes.filter(b => b.toLowerCase() !== texto.toLowerCase());
+  guardarBusquedasRecientes(busquedasRecientes);
+  mostrarSugerencias();
+}
+
+function limpiarTodoHistorial() {
+  busquedasRecientes = [];
+  guardarBusquedasRecientes(busquedasRecientes);
+  mostrarSugerencias();
+}
+
+function registrarBusquedaReciente(terminos) {
+  if (!terminos || terminos.length === 0) return;
+  const queryStr = terminos.join(' ').trim();
+  if (!queryStr) return;
+  busquedasRecientes = busquedasRecientes.filter(b => b.toLowerCase() !== queryStr.toLowerCase());
+  busquedasRecientes.unshift(queryStr);
+  if (busquedasRecientes.length > 8) {
+    busquedasRecientes = busquedasRecientes.slice(0, 8);
+  }
+  guardarBusquedasRecientes(busquedasRecientes);
+}
+
+let sugerenciasActivas = [];
+let sugerenciaIndex = -1;
+
+function mostrarSugerencias() {
+  if (!searchSuggestionsDropdown) return;
+  const query = searchInput.value.trim().toLowerCase();
+  sugerenciasActivas = [];
+  sugerenciaIndex = -1;
+
+  // ÚNICAMENTE las búsquedas del usuario (filtradas si hay texto escrito)
+  sugerenciasActivas = busquedasRecientes
+    .filter(b => !query || b.toLowerCase().includes(query))
+    .slice(0, 10)
+    .map(b => ({ texto: b }));
+
+  if (sugerenciasActivas.length === 0) {
+    ocultarSugerencias();
+    return;
+  }
+
+  renderSugerenciasDropdown(query);
+  searchSuggestionsDropdown.classList.remove('hidden');
+}
+
+function ocultarSugerencias() {
+  if (searchSuggestionsDropdown) {
+    searchSuggestionsDropdown.classList.add('hidden');
+  }
+  sugerenciaIndex = -1;
+}
+
+function renderSugerenciasDropdown(query) {
+  if (!searchSuggestionsDropdown) return;
+  searchSuggestionsDropdown.innerHTML = '';
+
+  sugerenciasActivas.forEach((item, idx) => {
+    const itemEl = document.createElement('div');
+    itemEl.className = 'suggestion-item' + (idx === sugerenciaIndex ? ' highlighted' : '');
+    itemEl.dataset.index = idx;
+
+    const textoResaltado = query
+      ? resaltarTextoGoogle(item.texto, query)
+      : escapeHtml(item.texto);
+
+    const iconoSvg = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>`;
+
+    itemEl.innerHTML = `
+      <div class="suggestion-item-main">
+        <span class="suggestion-icon">${iconoSvg}</span>
+        <span class="suggestion-text">${textoResaltado}</span>
+      </div>
+      <div class="suggestion-actions">
+        <button type="button" class="btn-delete-suggestion" title="Eliminar de las búsquedas">&times;</button>
+      </div>
+    `;
+
+    // Event listener para borrar búsqueda individual
+    const btnDel = itemEl.querySelector('.btn-delete-suggestion');
+    if (btnDel) {
+      btnDel.addEventListener('click', (e) => {
+        e.stopPropagation();
+        eliminarBusquedaReciente(item.texto);
+      });
+    }
+
+    itemEl.addEventListener('mouseenter', () => {
+      sugerenciaIndex = idx;
+      actualizarHighlightSugerencias();
+    });
+
+    itemEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      seleccionarSugerencia(item.texto);
+    });
+
+    searchSuggestionsDropdown.appendChild(itemEl);
+  });
+
+  const footer = document.createElement('div');
+  footer.className = 'suggestion-footer';
+  footer.innerHTML = `
+    ${busquedasRecientes.length > 0 ? '<button type="button" class="btn-clear-history-link" id="btn-clear-history">Borrar historial de búsquedas</button>' : '<span>Sin búsquedas</span>'}
+    <span>Navega con <kbd>↑</kbd> <kbd>↓</kbd> · <kbd>Enter</kbd></span>
+  `;
+
+  const btnClearAll = footer.querySelector('#btn-clear-history');
+  if (btnClearAll) {
+    btnClearAll.addEventListener('click', (e) => {
+      e.stopPropagation();
+      limpiarTodoHistorial();
+    });
+  }
+
+  searchSuggestionsDropdown.appendChild(footer);
+}
+
+function resaltarTextoGoogle(texto, query) {
+  if (!query) return escapeHtml(texto);
+  const idx = texto.toLowerCase().indexOf(query.toLowerCase());
+  if (idx === -1) return escapeHtml(texto);
+  const antes = texto.substring(0, idx);
+  const coincide = texto.substring(idx, idx + query.length);
+  const despues = texto.substring(idx + query.length);
+  return `${escapeHtml(antes)}<span class="match-highlight">${escapeHtml(coincide)}</span>${escapeHtml(despues)}`;
+}
+
+function actualizarHighlightSugerencias() {
+  if (!searchSuggestionsDropdown) return;
+  const items = searchSuggestionsDropdown.querySelectorAll('.suggestion-item');
+  items.forEach((it, idx) => {
+    if (idx === sugerenciaIndex) {
+      it.classList.add('highlighted');
+      it.scrollIntoView({ block: 'nearest' });
+    } else {
+      it.classList.remove('highlighted');
+    }
+  });
+}
+
+function seleccionarSugerencia(texto) {
+  if (!texto) return;
+  const partes = texto.trim().split(/\s+/);
+  partes.forEach(p => agregarChip(p));
+  searchInput.value = '';
+  actualizarBotonLimpiar();
+  ocultarSugerencias();
+  ejecutarBusqueda();
+  searchInput.focus();
+}
 
 const stateInitial = document.getElementById('state-initial');
 const stateLoading = document.getElementById('state-loading');
@@ -46,42 +255,26 @@ const connectionStatus = document.getElementById('connection-status');
 const statusText = document.getElementById('status-text');
 const sidebarCurrentPath = document.getElementById('sidebar-current-path');
 const btnQuickVerify = document.getElementById('btn-quick-verify');
-
-const btnExportCsv = document.getElementById('btn-export-csv');
 const btnOpenSettings = document.getElementById('btn-open-settings');
-
-// Modales
-const modalPreview = document.getElementById('modal-preview');
-const btnClosePreview = document.getElementById('btn-close-preview');
-const previewFilename = document.getElementById('preview-filename');
-const previewDelegacion = document.getElementById('preview-delegacion');
-const previewSize = document.getElementById('preview-size');
-const previewDate = document.getElementById('preview-date');
-const previewUncInput = document.getElementById('preview-unc-input');
-const previewIframe = document.getElementById('preview-iframe');
-const btnCopyPreviewUnc = document.getElementById('btn-copy-preview-unc');
-const btnOpenOsModal = document.getElementById('btn-open-os-modal');
-const btnOpenFolderModal = document.getElementById('btn-open-folder-modal');
 
 const modalSettings = document.getElementById('modal-settings');
 const btnCloseSettings = document.getElementById('btn-close-settings');
-const cfgRutaBase = document.getElementById('cfg-ruta-base');
-const cfgProfundidad = document.getElementById('cfg-profundidad');
+const cfgRutaIrec = document.getElementById('cfg-ruta-irec');
+const cfgRutaSsdirec = document.getElementById('cfg-ruta-ssdirec');
 const cfgTimeout = document.getElementById('cfg-timeout');
-const btnBrowseFolder = document.getElementById('btn-browse-folder');
-const btnTestConnection = document.getElementById('btn-test-connection');
+const btnBrowseIrec = document.getElementById('btn-browse-irec');
+const btnBrowseSsdirec = document.getElementById('btn-browse-ssdirec');
 const btnSaveSettings = document.getElementById('btn-save-settings');
 
 const toastContainer = document.getElementById('toast-container');
 
-// ==========================================================================
-// INICIALIZACIÓN
-// ==========================================================================
 document.addEventListener('DOMContentLoaded', async () => {
   setupEventListeners();
+  initTableColumnResizers();
   await cargarConfiguracionInicial();
-  await cargarDelegaciones();
-  verificarEstadoRed();
+  await verificarEstadoRed();
+  await cargarCarpetasAlmacenamiento(currentConfig.servidorActivo);
+  await cargarListadoInicial();
 });
 
 async function cargarConfiguracionInicial() {
@@ -90,14 +283,43 @@ async function cargarConfiguracionInicial() {
     if (cfg) {
       currentConfig = { ...currentConfig, ...cfg };
     }
-    sidebarCurrentPath.textContent = currentConfig.rutaBase;
-    sidebarCurrentPath.title = currentConfig.rutaBase;
-    cfgRutaBase.value = currentConfig.rutaBase;
-    cfgProfundidad.value = currentConfig.profundidadMaxima || 6;
-    cfgTimeout.value = Math.round((currentConfig.tiempoLimiteMs || 45000) / 1000);
-    selectMaxResults.value = currentConfig.limiteResultados || 200;
+
+    actualizarTabsAlmacenamiento(currentConfig.servidorActivo || 'irec');
+    actualizarRutaSidebar();
+    actualizarBreadcrumb();
+
+    if (cfgRutaIrec) cfgRutaIrec.value = currentConfig.rutaIrec || '\\\\172.40.5.84\\irec';
+    if (cfgRutaSsdirec) cfgRutaSsdirec.value = currentConfig.rutaSsdirec || '\\\\172.40.5.84\\ssdirec';
+    if (cfgTimeout) cfgTimeout.value = currentConfig.tiempoLimiteMs || 45000;
+    if (selectMaxResults) selectMaxResults.value = currentConfig.limiteResultados || 200;
   } catch (err) {
     console.error('Error al cargar config:', err);
+  }
+}
+
+function actualizarRutaSidebar() {
+  const alm = currentConfig.servidorActivo;
+  if (alm === 'ssdirec') {
+    sidebarCurrentPath.textContent = currentConfig.rutaSsdirec;
+    sidebarCurrentPath.title = currentConfig.rutaSsdirec;
+  } else if (alm === 'ambos') {
+    sidebarCurrentPath.textContent = 'irec + ssdirec';
+    sidebarCurrentPath.title = `${currentConfig.rutaIrec} + ${currentConfig.rutaSsdirec}`;
+  } else {
+    sidebarCurrentPath.textContent = currentConfig.rutaIrec;
+    sidebarCurrentPath.title = currentConfig.rutaIrec;
+  }
+}
+
+function actualizarBreadcrumb() {
+  const alm = currentConfig.servidorActivo || 'irec';
+  if (bcServerBadge) {
+    bcServerBadge.textContent = alm;
+    bcServerBadge.className = `bc-server-badge ${alm}`;
+  }
+  if (bcFolderName) {
+    bcFolderName.textContent = currentCarpeta ? currentCarpeta : 'Todas las carpetas';
+    bcFolderName.title = currentCarpeta ? currentCarpeta : 'Todas las carpetas';
   }
 }
 
@@ -106,310 +328,490 @@ async function verificarEstadoRed() {
   statusText.textContent = 'Verificando red...';
 
   try {
-    const res = await window.electronAPI.verificarRuta(currentConfig.rutaBase);
-    if (res.existe) {
+    const res = await window.electronAPI.verificarServidores({
+      rutaIrec: currentConfig.rutaIrec,
+      rutaSsdirec: currentConfig.rutaSsdirec
+    });
+
+    if (res.irec && res.ssdirec) {
       connectionStatus.className = 'status-pill online';
-      statusText.textContent = 'Servidor IREC Activo';
+      statusText.textContent = 'irec & ssdirec Conectados';
+      return true;
+    } else if (res.irec) {
+      connectionStatus.className = 'status-pill online';
+      statusText.textContent = 'Servidor irec Conectado';
+      return true;
+    } else if (res.ssdirec) {
+      connectionStatus.className = 'status-pill online';
+      statusText.textContent = 'Servidor ssdirec Conectado';
+      return true;
     } else {
       connectionStatus.className = 'status-pill offline';
-      statusText.textContent = 'Ruta no accesible';
-      showToast('No se puede acceder a ' + currentConfig.rutaBase, 'error');
+      statusText.textContent = 'Servidores no accesibles';
+      showToast('No se puede acceder a las rutas de red configuradas', 'error');
+      return false;
     }
   } catch (err) {
     connectionStatus.className = 'status-pill offline';
     statusText.textContent = 'Error de conexión';
+    return false;
   }
 }
 
-async function cargarDelegaciones() {
+function actualizarTabsAlmacenamiento(almacenamiento) {
+  storageTabs.forEach(tab => {
+    if (tab.dataset.storage === almacenamiento) {
+      tab.classList.add('active');
+    } else {
+      tab.classList.remove('active');
+    }
+  });
+
+  if (foldersSectionTitle) {
+    foldersSectionTitle.textContent = almacenamiento === 'ssdirec' ? 'EXPLORADOR SSDIREC' : almacenamiento === 'ambos' ? 'EXPLORADOR DE RED' : 'EXPLORADOR IREC';
+  }
+
+  if (allFoldersLabel) {
+    allFoldersLabel.textContent = almacenamiento === 'ssdirec' ? 'Todo ssdirec' : almacenamiento === 'ambos' ? 'Todos los servidores' : 'Todo irec';
+  }
+
+  actualizarBreadcrumb();
+}
+
+async function cambiarAlmacenamiento(nuevoAlmacenamiento) {
+  if (currentConfig.servidorActivo === nuevoAlmacenamiento) return;
+
+  currentConfig.servidorActivo = nuevoAlmacenamiento;
+  currentCarpeta = '';
+  currentRutaCompleta = '';
+
+  actualizarTabsAlmacenamiento(nuevoAlmacenamiento);
+  actualizarRutaSidebar();
+  actualizarBreadcrumb();
+
+  showToast(`Cambiado a [${nuevoAlmacenamiento.toUpperCase()}]`, 'info');
+
+  await cargarCarpetasAlmacenamiento(nuevoAlmacenamiento);
+
+  const terminos = obtenerTerminosBusqueda();
+  if (terminos.length > 0) {
+    ejecutarBusqueda();
+  } else {
+    cargarListadoInicial();
+  }
+}
+// ==========================================================================
+// EXPLORADOR DE ARCHIVOS EN SIDEBAR (TREE VIEW CON SCROLL Y CACHÉ EN MEMORIA)
+// ==========================================================================
+async function cargarCarpetasAlmacenamiento(almacenamiento, forzarRed = false) {
   try {
-    const res = await window.electronAPI.obtenerDelegaciones(currentConfig.rutaBase);
-    if (res && res.delegaciones) {
-      delegacionesList = res.delegaciones;
-      delegacionesCount.textContent = delegacionesList.length;
-      renderDelegacionesList(delegacionesList);
+    // Si ya está guardado en memoria RAM y no se fuerza recarga
+    if (!forzarRed && cacheMemoria.carpetasRaiz.has(almacenamiento)) {
+      carpetasList = cacheMemoria.carpetasRaiz.get(almacenamiento);
+      renderizarArbolCarpetas(carpetasList);
+      return;
+    }
+
+    explorerTree.innerHTML = '<div style="padding: 12px; font-size: 12px; color: #94a3b8;">Cargando árbol de carpetas...</div>';
+
+    const res = await window.electronAPI.obtenerCarpetas({
+      almacenamiento,
+      rutaIrec: currentConfig.rutaIrec,
+      rutaSsdirec: currentConfig.rutaSsdirec
+    });
+
+    if (res && res.carpetas) {
+      carpetasList = res.carpetas;
+      cacheMemoria.carpetasRaiz.set(almacenamiento, carpetasList);
+      renderizarArbolCarpetas(carpetasList);
+    } else {
+      explorerTree.innerHTML = '<div style="padding: 12px; font-size: 12px; color: #e53e3e;">No se pudieron leer las carpetas.</div>';
     }
   } catch (err) {
-    console.error('Error obteniendo delegaciones:', err);
+    console.error('Error obteniendo carpetas:', err);
+    explorerTree.innerHTML = '<div style="padding: 12px; font-size: 12px; color: #e53e3e;">Error al acceder a la red.</div>';
   }
 }
 
-function renderDelegacionesList(delegaciones) {
-  // Limpiar lista excepto el primero ("Todas las delegaciones")
-  const items = delegacionesUl.querySelectorAll('li:not(:first-child)');
-  items.forEach(el => el.remove());
+function renderizarArbolCarpetas(carpetas) {
+  explorerTree.innerHTML = '';
 
-  delegaciones.forEach(del => {
-    const li = document.createElement('li');
-    li.className = 'delegacion-item' + (currentDelegacion === del.nombre ? ' active' : '');
-    li.dataset.delegacion = del.nombre;
+  carpetas.forEach(c => {
+    const nombre = typeof c === 'string' ? c : c.nombre;
+    const subruta = (c && c.subruta) ? c.subruta : nombre;
+    const rutaCompleta = (c && c.rutaCompleta) ? c.rutaCompleta : '';
+    if (!nombre) return;
 
-    li.innerHTML = `
-      <span class="del-bullet"></span>
-      <span class="del-name" title="${escapeHtml(del.nombre)}">${escapeHtml(del.nombre)}</span>
+    const nodeGroup = document.createElement('div');
+    nodeGroup.className = 'tree-node-group';
+
+    const itemDiv = document.createElement('div');
+    itemDiv.className = 'tree-item' + (currentCarpeta === subruta ? ' active' : '');
+    itemDiv.dataset.subruta = subruta;
+    itemDiv.dataset.rutaCompleta = rutaCompleta;
+    itemDiv.dataset.nombre = nombre;
+
+    const sizeClass = obtenerClaseTamanoTexto(nombre);
+
+    itemDiv.innerHTML = `
+      <span class="tree-toggle" title="Expandir/Colapsar">\u25B8</span>
+      <span class="tree-folder-emoji">\u{1F4C1}</span>
+      <span class="tree-label ${sizeClass}" title="${escapeHtml(nombre)}">${escapeHtml(nombre)}</span>
     `;
 
-    li.addEventListener('click', () => {
-      seleccionarDelegacion(del.nombre);
-    });
+    const childrenContainer = document.createElement('div');
+    childrenContainer.className = 'tree-children hidden';
 
-    delegacionesUl.appendChild(li);
-  });
-}
+    const toggleBtn = itemDiv.querySelector('.tree-toggle');
+    const folderEmoji = itemDiv.querySelector('.tree-folder-emoji');
 
-function seleccionarDelegacion(nombre) {
-  currentDelegacion = nombre || '';
-  
-  // Actualizar clases activas en sidebar
-  const items = delegacionesUl.querySelectorAll('.delegacion-item');
-  items.forEach(el => {
-    if (el.dataset.delegacion === currentDelegacion) {
-      el.classList.add('active');
-    } else {
-      el.classList.remove('active');
-    }
-  });
+    toggleBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const isOpen = toggleBtn.classList.contains('open');
 
-  // Actualizar pill en el toolbar
-  activeDelName.textContent = currentDelegacion ? currentDelegacion : 'Todas las Delegaciones';
+      if (isOpen) {
+        toggleBtn.classList.remove('open');
+        toggleBtn.textContent = '\u25B8';
+        if (folderEmoji) folderEmoji.textContent = '\u{1F4C1}';
+        childrenContainer.classList.add('hidden');
+      } else {
+        toggleBtn.classList.add('open');
+        toggleBtn.textContent = '\u25BE';
+        if (folderEmoji) folderEmoji.textContent = '\u{1F4C2}';
+        childrenContainer.classList.remove('hidden');
 
-  // Si hay búsqueda previa y texto, re-ejecutar automáticamente
-  if (searchInput.value.trim().length > 0 && ultimosResultados.length > 0) {
-    ejecutarBusqueda();
-  }
-}
+        if (!childrenContainer.dataset.loaded) {
+          const rutaBase = currentConfig.servidorActivo === 'ssdirec' ? currentConfig.rutaSsdirec : currentConfig.rutaIrec;
+          const cacheKey = `${rutaBase}:::${subruta || rutaCompleta}`;
 
-// ==========================================================================
-// EVENT LISTENERS
-// ==========================================================================
-function setupEventListeners() {
-  // Búsqueda
-  btnExecSearch.addEventListener('click', ejecutarBusqueda);
-  searchInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      ejecutarBusqueda();
-    } else if (e.key === 'Escape') {
-      limpiarBusqueda();
-    }
-  });
+          if (cacheMemoria.subcarpetas.has(cacheKey)) {
+            const subs = cacheMemoria.subcarpetas.get(cacheKey);
+            childrenContainer.innerHTML = '';
+            childrenContainer.dataset.loaded = 'true';
+            if (subs && subs.length > 0) {
+              subs.forEach(sub => renderSubnodo(sub, childrenContainer, rutaBase));
+            } else {
+              toggleBtn.style.visibility = 'hidden';
+              childrenContainer.remove();
+            }
+          } else {
+            childrenContainer.innerHTML = '<div style="padding: 4px 8px; font-size: 11px; color: #94a3b8;">Cargando...</div>';
+            try {
+              const subs = await window.electronAPI.obtenerSubcarpetas({
+                rutaBase,
+                subruta,
+                rutaCompleta
+              });
 
-  searchInput.addEventListener('input', () => {
-    btnClearSearch.style.display = searchInput.value.trim().length > 0 ? 'flex' : 'none';
-  });
+              cacheMemoria.subcarpetas.set(cacheKey, subs || []);
+              childrenContainer.innerHTML = '';
+              childrenContainer.dataset.loaded = 'true';
 
-  btnClearSearch.addEventListener('click', limpiarBusqueda);
-
-  // Filtro de delegaciones en sidebar
-  filterDelegacionInput.addEventListener('input', () => {
-    const q = filterDelegacionInput.value.toLowerCase().trim();
-    const filtradas = delegacionesList.filter(d => d.nombre.toLowerCase().includes(q));
-    renderDelegacionesList(filtradas);
-  });
-
-  // Click en "Todas las delegaciones"
-  const allDelItem = delegacionesUl.querySelector('.delegacion-item.all, .delegacion-item:first-child');
-  if (allDelItem) {
-    allDelItem.addEventListener('click', () => seleccionarDelegacion(''));
-  }
-
-  // Tags rápidos en sidebar
-  document.querySelectorAll('.quick-tag').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const tag = btn.dataset.query;
-      const current = searchInput.value.trim();
-      if (current) {
-        if (!current.includes(tag)) {
-          searchInput.value = `${current} ${tag}`;
+              if (subs && subs.length > 0) {
+                subs.forEach(sub => renderSubnodo(sub, childrenContainer, rutaBase));
+              } else {
+                toggleBtn.style.visibility = 'hidden';
+                childrenContainer.remove();
+              }
+            } catch (err) {
+              childrenContainer.innerHTML = '<div style="padding: 4px 8px; font-size: 11px; color: #e53e3e;">Sin acceso</div>';
+            }
+          }
         }
-      } else {
-        searchInput.value = tag;
-      }
-      btnClearSearch.style.display = 'flex';
-      ejecutarBusqueda();
-    });
-  });
-
-  // Chips de ejemplo en el estado inicial
-  document.querySelectorAll('.ex-chip').forEach(btn => {
-    btn.addEventListener('click', () => {
-      searchInput.value = btn.dataset.example;
-      btnClearSearch.style.display = 'flex';
-      ejecutarBusqueda();
-    });
-  });
-
-  // Modos de coincidencia (AND / OR)
-  matchModeBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-      matchModeBtns.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      currentConfig.modoCoincidencia = btn.dataset.mode;
-      if (searchInput.value.trim().length > 0 && ultimosResultados.length > 0) {
-        ejecutarBusqueda();
       }
     });
+
+    itemDiv.addEventListener('click', () => {
+      seleccionarCarpeta(subruta, rutaCompleta, nombre, itemDiv);
+    });
+
+    nodeGroup.appendChild(itemDiv);
+    nodeGroup.appendChild(childrenContainer);
+    explorerTree.appendChild(nodeGroup);
   });
+}
 
-  // Exportar CSV
-  btnExportCsv.addEventListener('click', exportarResultadosCSV);
+function renderSubnodo(sub, parentContainer, rutaBase) {
+  const subGroup = document.createElement('div');
+  subGroup.className = 'tree-node-group';
 
-  // Botón verificar red rápido
-  btnQuickVerify.addEventListener('click', verificarEstadoRed);
+  const subItem = document.createElement('div');
+  subItem.className = 'tree-item' + (currentCarpeta === sub.subruta ? ' active' : '');
+  subItem.dataset.subruta = sub.subruta;
+  subItem.dataset.rutaCompleta = sub.rutaCompleta;
+  subItem.dataset.nombre = sub.nombre;
 
-  // Modales
-  btnOpenSettings.addEventListener('click', () => {
-    modalSettings.style.display = 'flex';
-  });
-  btnCloseSettings.addEventListener('click', () => {
-    modalSettings.style.display = 'none';
-  });
-  btnClosePreview.addEventListener('click', cerrarModalPreview);
+  const sizeClass = obtenerClaseTamanoTexto(sub.nombre);
 
-  modalPreview.addEventListener('click', (e) => {
-    if (e.target === modalPreview) cerrarModalPreview();
-  });
-  modalSettings.addEventListener('click', (e) => {
-    if (e.target === modalSettings) modalSettings.style.display = 'none';
-  });
+  subItem.innerHTML = `
+    <span class="tree-toggle" title="Expandir/Colapsar">\u25B8</span>
+    <span class="tree-folder-emoji">\u{1F4C1}</span>
+    <span class="tree-label ${sizeClass}" title="${escapeHtml(sub.nombre)}">${escapeHtml(sub.nombre)}</span>
+  `;
 
-  // Acciones en modal preview
-  btnCopyPreviewUnc.addEventListener('click', () => {
-    if (previewUncInput.value) {
-      window.electronAPI.copiarPortapapeles(previewUncInput.value);
-      showToast('Ruta copiada al portapapeles', 'success');
-    }
-  });
+  const subChildren = document.createElement('div');
+  subChildren.className = 'tree-children hidden';
 
-  btnOpenOsModal.addEventListener('click', async () => {
-    if (activePreviewFile) {
-      const res = await window.electronAPI.abrirArchivo(activePreviewFile.rutaCompleta);
-      if (res.success) {
-        showToast('Abriendo archivo con el visor predeterminado...', 'success');
-      } else {
-        showToast('Error al abrir: ' + (res.error || 'no disponible'), 'error');
-      }
-    }
-  });
+  const subToggle = subItem.querySelector('.tree-toggle');
+  const subEmoji = subItem.querySelector('.tree-folder-emoji');
 
-  btnOpenFolderModal.addEventListener('click', async () => {
-    if (activePreviewFile) {
-      await window.electronAPI.abrirEnCarpeta(activePreviewFile.rutaCompleta);
-      showToast('Mostrando en el Explorador de Windows', 'info');
-    }
-  });
-
-  // Examinar carpeta en ajustes
-  btnBrowseFolder.addEventListener('click', async () => {
-    const selected = await window.electronAPI.seleccionarCarpeta();
-    if (selected) {
-      cfgRutaBase.value = selected;
-    }
-  });
-
-  // Probar conexión en ajustes
-  btnTestConnection.addEventListener('click', async () => {
-    const ruta = cfgRutaBase.value.trim();
-    if (!ruta) return;
-    btnTestConnection.textContent = 'Comprobando...';
-    btnTestConnection.disabled = true;
-
-    try {
-      const res = await window.electronAPI.verificarRuta(ruta);
-      if (res.existe) {
-        showToast('¡Conexión exitosa! Directorio accesible.', 'success');
-      } else {
-        showToast('Error: No se puede acceder a la ruta indicada.', 'error');
-      }
-    } catch (err) {
-      showToast('Fallo de red: ' + err.message, 'error');
-    } finally {
-      btnTestConnection.textContent = 'Probar Conexión';
-      btnTestConnection.disabled = false;
-    }
-  });
-
-  // Guardar ajustes
-  btnSaveSettings.addEventListener('click', async () => {
-    const nuevaRuta = cfgRutaBase.value.trim();
-    const nuevaProf = parseInt(cfgProfundidad.value, 10) || 6;
-    const nuevoTimeout = (parseInt(cfgTimeout.value, 10) || 45) * 1000;
-
-    const nuevaConfig = {
-      rutaBase: nuevaRuta,
-      profundidadMaxima: nuevaProf,
-      tiempoLimiteMs: nuevoTimeout
-    };
-
-    const res = await window.electronAPI.guardarConfig(nuevaConfig);
-    if (res.success) {
-      currentConfig = { ...currentConfig, ...res.config };
-      sidebarCurrentPath.textContent = currentConfig.rutaBase;
-      sidebarCurrentPath.title = currentConfig.rutaBase;
-      modalSettings.style.display = 'none';
-      showToast('Configuración guardada con éxito', 'success');
-      verificarEstadoRed();
-      cargarDelegaciones();
+  subToggle.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const isOpen = subToggle.classList.contains('open');
+    if (isOpen) {
+      subToggle.classList.remove('open');
+      subToggle.textContent = '\u25B8';
+      if (subEmoji) subEmoji.textContent = '\u{1F4C1}';
+      subChildren.classList.add('hidden');
     } else {
-      showToast('Error al guardar: ' + res.error, 'error');
+      subToggle.classList.add('open');
+      subToggle.textContent = '\u25BE';
+      if (subEmoji) subEmoji.textContent = '\u{1F4C2}';
+      subChildren.classList.remove('hidden');
+
+      if (!subChildren.dataset.loaded) {
+        const cacheKey = `${rutaBase}:::${sub.subruta || sub.rutaCompleta}`;
+
+        if (cacheMemoria.subcarpetas.has(cacheKey)) {
+          const deepSubs = cacheMemoria.subcarpetas.get(cacheKey);
+          subChildren.innerHTML = '';
+          subChildren.dataset.loaded = 'true';
+          if (deepSubs && deepSubs.length > 0) {
+            deepSubs.forEach(ds => renderSubnodo(ds, subChildren, rutaBase));
+          } else {
+            subToggle.style.visibility = 'hidden';
+            subChildren.remove();
+          }
+        } else {
+          subChildren.innerHTML = '<div style="padding: 4px 8px; font-size: 11px; color: #94a3b8;">Cargando...</div>';
+          try {
+            const deepSubs = await window.electronAPI.obtenerSubcarpetas({
+              rutaBase,
+              subruta: sub.subruta,
+              rutaCompleta: sub.rutaCompleta
+            });
+
+            cacheMemoria.subcarpetas.set(cacheKey, deepSubs || []);
+            subChildren.innerHTML = '';
+            subChildren.dataset.loaded = 'true';
+
+            if (deepSubs && deepSubs.length > 0) {
+              deepSubs.forEach(ds => renderSubnodo(ds, subChildren, rutaBase));
+            } else {
+              subToggle.style.visibility = 'hidden';
+              subChildren.remove();
+            }
+          } catch (err) {
+            subChildren.innerHTML = '<div style="padding: 4px 8px; font-size: 11px; color: #e53e3e;">Sin acceso</div>';
+          }
+        }
+      }
     }
   });
 
-  // Atajos globales de teclado
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      if (modalPreview.style.display === 'flex') {
-        cerrarModalPreview();
-      } else if (modalSettings.style.display === 'flex') {
-        modalSettings.style.display = 'none';
-      }
-    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
-      e.preventDefault();
-      searchInput.focus();
-      searchInput.select();
-    }
+  subItem.addEventListener('click', () => {
+    seleccionarCarpeta(sub.subruta, sub.rutaCompleta, sub.nombre, subItem);
   });
+
+  subGroup.appendChild(subItem);
+  subGroup.appendChild(subChildren);
+  parentContainer.appendChild(subGroup);
+}
+
+function seleccionarCarpeta(subruta, rutaCompleta, nombre, elementoClick = null) {
+  currentCarpeta = subruta || '';
+  currentRutaCompleta = rutaCompleta || '';
+
+  // Actualizar estado de selección visible (.active) en todo el árbol
+  document.querySelectorAll('.tree-item').forEach(el => el.classList.remove('active'));
+
+  if (elementoClick) {
+    elementoClick.classList.add('active');
+  } else if (!currentCarpeta && treeRootAll) {
+    treeRootAll.classList.add('active');
+  } else {
+    const items = document.querySelectorAll('.tree-item');
+    for (const el of items) {
+      if (
+        (currentCarpeta && el.dataset.subruta === currentCarpeta) ||
+        (currentRutaCompleta && el.dataset.rutaCompleta === currentRutaCompleta)
+      ) {
+        el.classList.add('active');
+        break;
+      }
+    }
+  }
+
+  const alm = currentConfig.servidorActivo;
+  const labelDefault = alm === 'ssdirec' ? 'Todo ssdirec' : alm === 'ambos' ? 'Ambos servidores' : 'Todo irec';
+  if (activeDelName) {
+    activeDelName.textContent = nombre ? nombre : labelDefault;
+  }
+
+  actualizarBreadcrumb();
+
+  const terminos = obtenerTerminosBusqueda();
+  if (terminos.length > 0) {
+    ejecutarBusqueda();
+  } else {
+    cargarListadoInicial();
+  }
+}
+
+// ==========================================================================
+// GESTIÓN DE BADGES / CHIPS DE PALABRAS
+// ==========================================================================
+function renderChips() {
+  chipsList.innerHTML = '';
+  searchChips.forEach((chip, index) => {
+    const el = document.createElement('span');
+    el.className = 'search-badge-chip';
+    el.innerHTML = `
+      <span class="badge-chip-text">${escapeHtml(chip)}</span>
+      <button type="button" class="badge-chip-remove" title="Eliminar etiqueta" data-index="${index}">&times;</button>
+    `;
+
+    el.querySelector('.badge-chip-remove').addEventListener('click', (e) => {
+      e.stopPropagation();
+      eliminarChip(index);
+    });
+
+    chipsList.appendChild(el);
+  });
+}
+
+function agregarChip(palabra) {
+  const limpia = palabra.trim().replace(/^[,;\s]+|[,;\s]+$/g, '');
+  if (!limpia) return;
+  if (!searchChips.includes(limpia)) {
+    searchChips.push(limpia);
+    renderChips();
+    actualizarBotonLimpiar();
+  }
+}
+
+function eliminarChip(index) {
+  searchChips.splice(index, 1);
+  renderChips();
+  actualizarBotonLimpiar();
+  ejecutarBusqueda();
+}
+
+function obtenerTerminosBusqueda() {
+  const terminos = [...searchChips];
+  const entradaActual = searchInput.value.trim();
+  if (entradaActual) {
+    const partes = entradaActual.split(/\s+/);
+    partes.forEach(p => {
+      const limpia = p.replace(/^[,;\s]+|[,;\s]+$/g, '');
+      if (limpia && !terminos.includes(limpia)) {
+        terminos.push(limpia);
+      }
+    });
+  }
+  return terminos;
+}
+
+function actualizarBotonLimpiar() {
+  if (searchChips.length > 0 || searchInput.value.trim().length > 0) {
+    btnClearSearch.style.display = 'flex';
+  } else {
+    btnClearSearch.style.display = 'none';
+  }
 }
 
 function limpiarBusqueda() {
+  searchChips = [];
   searchInput.value = '';
-  btnClearSearch.style.display = 'none';
-  stateInitial.style.display = 'flex';
-  stateLoading.style.display = 'none';
-  stateNoResults.style.display = 'none';
-  resultsTableContainer.style.display = 'none';
-  resultsKpiBar.style.display = 'none';
-  btnExportCsv.disabled = true;
-  ultimosResultados = [];
+  renderChips();
+  actualizarBotonLimpiar();
+  cargarListadoInicial();
   searchInput.focus();
 }
+// ==========================================================================
+// CARGA INICIAL DE ARCHIVOS (CON MEMORIA RAM CACHÉ)
+// ==========================================================================
+async function cargarListadoInicial(forzarRed = false) {
+  const alm = currentConfig.servidorActivo;
+  const limite = parseInt(selectMaxResults.value, 10) || 200;
+  const cacheKey = `${alm}:::${currentCarpeta}:::${currentRutaCompleta}:::${limite}`;
 
-// ==========================================================================
-// EJECUCIÓN DE BÚSQUEDA
-// ==========================================================================
-async function ejecutarBusqueda() {
-  const query = searchInput.value.trim();
-  if (!query) {
-    limpiarBusqueda();
+  // Si ya se consultó antes, responder de inmediato en 0ms desde memoria RAM
+  if (!forzarRed && cacheMemoria.listados.has(cacheKey)) {
+    const cached = cacheMemoria.listados.get(cacheKey);
+    renderResultados({ ...cached, duracionSegundos: 0, desdeCache: true });
     return;
   }
 
-  // Obtener modo de coincidencia activo
-  let modo = 'todas';
-  matchModeBtns.forEach(btn => {
-    if (btn.classList.contains('active')) modo = btn.dataset.mode;
-  });
+  stateInitial.style.display = 'none';
+  stateNoResults.style.display = 'none';
+  resultsTableContainer.style.display = 'none';
+  resultsKpiBar.style.display = 'none';
+  stateLoading.style.display = 'flex';
+
+  const titleEl = document.getElementById('loading-title');
+  const detailsEl = document.getElementById('loading-details');
+  const carpetaText = currentCarpeta ? `en ${currentCarpeta}` : `en ${alm.toUpperCase()}`;
+  titleEl.textContent = `Listando archivos ${carpetaText}...`;
+  detailsEl.textContent = 'Obteniendo expedientes PDF...';
+
+  try {
+    const res = await window.electronAPI.listarArchivosIniciales({
+      almacenamiento: alm,
+      rutaIrec: currentConfig.rutaIrec,
+      rutaSsdirec: currentConfig.rutaSsdirec,
+      carpeta: currentCarpeta,
+      rutaCompleta: currentRutaCompleta,
+      limite: limite
+    });
+
+    if (res && res.archivos) {
+      cacheMemoria.listados.set(cacheKey, res);
+    }
+    renderResultados(res);
+  } catch (err) {
+    console.error('Error al listar archivos iniciales:', err);
+    mostrarErrorBusqueda(err.message);
+  }
+}
+
+// ==========================================================================
+// EJECUCIÓN DE BÚSQUEDA (CON MEMORIA RAM CACHÉ)
+// ==========================================================================
+async function ejecutarBusqueda(esSilencioso = false, forzarRed = false) {
+  const terminos = obtenerTerminosBusqueda();
+
+  if (terminos.length === 0) {
+    cargarListadoInicial(forzarRed);
+    return;
+  }
+
+  registrarBusquedaReciente(terminos);
 
   const limite = parseInt(selectMaxResults.value, 10) || 200;
-  const buscarEnRuta = checkSearchInPath.checked;
+  const buscarEnRuta = chkSearchInPath ? chkSearchInPath.checked : true;
+  const alm = currentConfig.servidorActivo;
+  const terminosClave = [...terminos].sort().join('|');
+  const cacheKey = `${alm}:::${currentCarpeta}:::${currentRutaCompleta}:::${terminosClave}:::${limite}:::${buscarEnRuta}`;
 
-  // Cambiar vista a cargando
-  mostrarEstadoCargando();
+  // Si esta búsqueda ya se hizo en esta carpeta, responder instantáneamente
+  if (!forzarRed && cacheMemoria.busquedas.has(cacheKey)) {
+    const cached = cacheMemoria.busquedas.get(cacheKey);
+    renderResultados({ ...cached, duracionSegundos: 0, desdeCache: true });
+    return;
+  }
+
+  if (!esSilencioso) {
+    mostrarEstadoCargando();
+  }
 
   const options = {
-    rutaBase: currentConfig.rutaBase,
-    palabras: query,
-    delegacion: currentDelegacion,
-    modoCoincidencia: modo,
+    almacenamiento: alm,
+    rutaIrec: currentConfig.rutaIrec,
+    rutaSsdirec: currentConfig.rutaSsdirec,
+    palabras: terminos,
+    carpeta: currentCarpeta,
+    rutaCompleta: currentRutaCompleta,
     limiteResultados: limite,
     profundidadMaxima: currentConfig.profundidadMaxima || 6,
     tiempoLimiteMs: currentConfig.tiempoLimiteMs || 45000,
@@ -419,6 +821,9 @@ async function ejecutarBusqueda() {
 
   try {
     const res = await window.electronAPI.buscarArchivos(options);
+    if (res && res.archivos) {
+      cacheMemoria.busquedas.set(cacheKey, res);
+    }
     renderResultados(res);
   } catch (err) {
     console.error('Error ejecutando búsqueda:', err);
@@ -432,11 +837,13 @@ function mostrarEstadoCargando() {
   resultsTableContainer.style.display = 'none';
   resultsKpiBar.style.display = 'none';
   stateLoading.style.display = 'flex';
-  btnExportCsv.disabled = true;
 
   const titleEl = document.getElementById('loading-title');
-  const delText = currentDelegacion ? `en ${currentDelegacion}` : 'en todas las delegaciones';
-  titleEl.textContent = `Buscando expedientes ${delText}...`;
+  const detailsEl = document.getElementById('loading-details');
+  const alm = currentConfig.servidorActivo;
+  const carpetaText = currentCarpeta ? `en ${currentCarpeta}` : `en todo [${alm.toUpperCase()}]`;
+  titleEl.textContent = `Buscando expedientes ${carpetaText}...`;
+  detailsEl.textContent = 'Comparando términos en milisegundos...';
 }
 
 function renderResultados(res) {
@@ -448,35 +855,37 @@ function renderResultados(res) {
     resultsKpiBar.style.display = 'none';
     stateNoResults.style.display = 'flex';
 
-    if (currentDelegacion) {
-      noResultsDesc.textContent = `No se encontraron coincidencias para "${res.palabras.join(' ')}" en la delegación "${currentDelegacion}".`;
+    const etiquetasStr = (res.palabras || []).join(', ');
+    const alm = currentConfig.servidorActivo;
+    if (currentCarpeta) {
+      noResultsDesc.textContent = `No se encontraron coincidencias para [${etiquetasStr}] en "${currentCarpeta}" (${alm}).`;
     } else {
-      noResultsDesc.textContent = `No se encontraron archivos que coincidan con las palabras clave ingresadas.`;
+      noResultsDesc.textContent = `No se encontraron archivos en ${alm} que coincidan con las etiquetas indicadas.`;
     }
     ultimosResultados = [];
-    btnExportCsv.disabled = true;
     return;
   }
 
   ultimosResultados = res.archivos;
-  btnExportCsv.disabled = false;
 
   // Render KPIs
-  kpiTotal.textContent = res.total;
-  kpiDuration.textContent = `${res.duracionSegundos}s`;
-
-  // Advertencias de límite / timeout
-  kpiWarnings.style.display = 'none';
-  kpiWarnings.innerHTML = '';
-  if (res.limiteAlcanzado) {
-    kpiWarnings.style.display = 'inline-block';
-    kpiWarnings.textContent = `Límite de ${selectMaxResults.value} alcanzado`;
-  } else if (res.tiempoAlcanzado) {
-    kpiWarnings.style.display = 'inline-block';
-    kpiWarnings.textContent = 'Tiempo límite alcanzado';
+  kpiTotal.textContent = res.archivos.length;
+  if (res.desdeCache) {
+    kpiDuration.textContent = '0.00s (en memoria)';
+  } else {
+    kpiDuration.textContent = (res.duracionSegundos || 0) + 's';
   }
 
-  // Badges de palabras buscadas
+  if (res.limiteAlcanzado) {
+    kpiWarnings.style.display = 'inline-block';
+    kpiWarnings.textContent = `(Límite de ${res.archivos.length} alcanzado)`;
+  } else if (res.tiempoAlcanzado) {
+    kpiWarnings.style.display = 'inline-block';
+    kpiWarnings.textContent = '(Tiempo límite alcanzado)';
+  } else {
+    kpiWarnings.style.display = 'none';
+  }
+
   matchedWordsBadges.innerHTML = '';
   if (res.palabras && res.palabras.length > 0) {
     res.palabras.forEach(w => {
@@ -489,21 +898,15 @@ function renderResultados(res) {
 
   resultsKpiBar.style.display = 'flex';
 
-  // Llenar tabla
   resultsTbody.innerHTML = '';
   const palabrasABuscar = res.palabras || [];
 
   res.archivos.forEach(item => {
     const tr = document.createElement('tr');
+    tr.title = 'Haz doble clic para abrir el archivo directamente';
 
-    // Nombre con resaltado
     const nombreResaltado = resaltarPalabras(item.nombre, palabrasABuscar);
-
-    // Subcarpeta sin el nombre del archivo
-    const rutaRelativa = item.rutaRelativa || '';
-    const partes = rutaRelativa.split(/[\\/]/);
-    partes.pop(); // Quitar nombre de archivo
-    const carpetaTexto = partes.join(' > ') || '-';
+    const serverTag = item.almacenamiento || (item.rutaCompleta.includes('ssdirec') ? 'ssdirec' : 'irec');
 
     tr.innerHTML = `
       <td class="col-icon">
@@ -518,160 +921,489 @@ function renderResultados(res) {
         <span class="del-tag">${escapeHtml(item.delegacion || 'General')}</span>
       </td>
       <td class="col-path" title="${escapeHtml(item.rutaCompleta)}">
-        ${escapeHtml(carpetaTexto)}
+        ${escapeHtml(item.rutaCompleta)}
       </td>
-      <td class="col-size">${escapeHtml(item.tamanoFormateado || '-')}</td>
-      <td class="col-date">${escapeHtml(item.fechaModificacion || '-')}</td>
       <td class="col-actions">
         <div class="action-btn-group">
-          <button class="btn-act primary btn-action-open" title="Abrir con lector predeterminado">
-            Abrir
+          <button class="btn-act btn-action-open" title="Abrir con lector PDF predeterminado">
+            <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+              <polyline points="15 3 21 3 21 9"></polyline>
+              <line x1="10" y1="14" x2="21" y2="3"></line>
+            </svg>
+            <span>Abrir</span>
           </button>
-          <button class="btn-act icon-only btn-action-folder" title="Mostrar en el Explorador">
-            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
+          <button class="btn-act btn-action-folder" title="Mostrar en el Explorador de Windows">
+            <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none">
               <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
             </svg>
+            <span>Carpeta</span>
           </button>
-          <button class="btn-act icon-only btn-action-copy" title="Copiar ruta de red UNC">
-            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
+          <button class="btn-act btn-action-copy" title="Copiar ruta de red UNC">
+            <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none">
               <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
               <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
             </svg>
-          </button>
-          <button class="btn-act icon-only btn-action-preview" title="Vista previa rápida">
-            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-              <circle cx="12" cy="12" r="3"></circle>
-            </svg>
+            <span>Copiar</span>
           </button>
         </div>
       </td>
     `;
 
-    // Eventos de botones
+    // Doble clic en cualquier parte de la fila: Abre el PDF directamente
+    tr.addEventListener('dblclick', async () => {
+      await abrirPdfDirecto(item);
+    });
+
     const btnOpen = tr.querySelector('.btn-action-open');
     const btnFolder = tr.querySelector('.btn-action-folder');
     const btnCopy = tr.querySelector('.btn-action-copy');
-    const btnPrev = tr.querySelector('.btn-action-preview');
 
-    btnOpen.addEventListener('click', async () => {
-      const resp = await window.electronAPI.abrirArchivo(item.rutaCompleta);
-      if (resp.success) {
-        showToast('Abriendo ' + item.nombre, 'success');
-      } else {
-        showToast('Error al abrir: ' + (resp.error || 'fallo'), 'error');
-      }
+    btnOpen.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await abrirPdfDirecto(item);
     });
 
-    btnFolder.addEventListener('click', async () => {
+    btnFolder.addEventListener('click', async (e) => {
+      e.stopPropagation();
       await window.electronAPI.abrirEnCarpeta(item.rutaCompleta);
       showToast('Ubicación abierta en Explorador', 'info');
     });
 
-    btnCopy.addEventListener('click', async () => {
+    btnCopy.addEventListener('click', async (e) => {
+      e.stopPropagation();
       await window.electronAPI.copiarPortapapeles(item.rutaCompleta);
-      showToast('Ruta UNC copiada', 'success');
-    });
-
-    btnPrev.addEventListener('click', () => {
-      abrirModalPreview(item);
+      showToast('Ruta UNC copiada al portapapeles', 'success');
     });
 
     resultsTbody.appendChild(tr);
   });
 
   resultsTableContainer.style.display = 'block';
+  stateInitial.style.display = 'none';
+  stateNoResults.style.display = 'none';
+}
+
+async function abrirPdfDirecto(item) {
+  showToast('Abriendo ' + item.nombre + ' en lector PDF...', 'success');
+  try {
+    const resp = await window.electronAPI.abrirArchivo(item.rutaCompleta);
+    if (resp && !resp.success) {
+      showToast('Error al abrir: ' + (resp.error || 'fallo'), 'error');
+    }
+  } catch (err) {
+    showToast('Error al abrir archivo: ' + err.message, 'error');
+  }
 }
 
 function mostrarErrorBusqueda(mensaje) {
   stateLoading.style.display = 'none';
-  stateInitial.style.display = 'none';
-  resultsTableContainer.style.display = 'none';
-  resultsKpiBar.style.display = 'none';
   stateNoResults.style.display = 'flex';
-  noResultsDesc.textContent = `Ocurrió un error durante la búsqueda: ${mensaje}`;
-  showToast(`Error: ${mensaje}`, 'error');
+  noResultsDesc.textContent = `Error al buscar: ${mensaje}`;
 }
 
 // ==========================================================================
-// VISTA PREVIA MODAL
+// REDIMENSIONAMIENTO DE COLUMNAS DE LA TABLA
 // ==========================================================================
-function abrirModalPreview(item) {
-  activePreviewFile = item;
-  previewFilename.textContent = item.nombre;
-  previewDelegacion.textContent = item.delegacion || 'General';
-  previewSize.textContent = item.tamanoFormateado || '-';
-  previewDate.textContent = item.fechaModificacion || '-';
-  previewUncInput.value = item.rutaCompleta;
+function initTableColumnResizers() {
+  const table = document.getElementById('results-table');
+  const wrapper = document.getElementById('results-table-container');
+  if (!table || !wrapper) return;
 
-  // Cargar PDF en iframe (Electron maneja file:// URLs en entornos seguros)
-  const fileUrl = 'file:///' + item.rutaCompleta.replace(/\\/g, '/');
-  previewIframe.src = fileUrl;
+  const STORAGE_KEY = 'irec_table_col_widths_v4';
 
-  modalPreview.style.display = 'flex';
-}
+  // Anchos predeterminados en px:
+  // Columnas actuales: Icono, Nombre del Archivo, Carpeta / Delegación, Ubicación Completa, Acciones (Abrir, Carpeta, Copiar)
+  const defaultWidths = {
+    'icon': 42,
+    'name': 250,
+    'del': 140,
+    'path': 340,
+    'actions': 230
+  };
 
-function cerrarModalPreview() {
-  modalPreview.style.display = 'none';
-  previewIframe.src = '';
-  activePreviewFile = null;
-}
+  const minWidths = {
+    'icon': 40,
+    'name': 120,
+    'del': 80,
+    'path': 120,
+    'actions': 215
+  };
 
-// ==========================================================================
-// EXPORTACIÓN A CSV
-// ==========================================================================
-function exportarResultadosCSV() {
-  if (!ultimosResultados || ultimosResultados.length === 0) {
-    showToast('No hay resultados para exportar', 'error');
-    return;
+  let savedWidths = {};
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) savedWidths = JSON.parse(raw);
+  } catch (e) {
+    console.warn('No se pudieron recuperar anchos de columnas:', e);
   }
 
-  const cabeceras = ['Nombre', 'Delegacion', 'Ruta Completa', 'Ruta Relativa', 'Tamaño', 'Fecha Modificacion'];
-  const filas = ultimosResultados.map(item => [
-    `"${(item.nombre || '').replace(/"/g, '""')}"`,
-    `"${(item.delegacion || '').replace(/"/g, '""')}"`,
-    `"${(item.rutaCompleta || '').replace(/"/g, '""')}"`,
-    `"${(item.rutaRelativa || '').replace(/"/g, '""')}"`,
-    `"${item.tamanoFormateado || ''}"`,
-    `"${item.fechaModificacion || ''}"`
-  ]);
+  const ths = Array.from(table.querySelectorAll('thead th'));
 
-  const csvContent = '\uFEFF' + [cabeceras.join(','), ...filas.map(f => f.join(','))].join('\r\n');
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
+  function updateTableWidth() {
+    let totalCols = 0;
+    ths.forEach(th => {
+      const col = th.dataset.col;
+      const w = parseInt(th.style.width, 10) || defaultWidths[col] || 100;
+      totalCols += w;
+    });
+    table.style.width = `${totalCols}px`;
+    table.style.minWidth = '100%';
+  }
 
-  const link = document.createElement('a');
-  link.setAttribute('href', url);
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-  link.setAttribute('download', `Expedientes_IREC_${timestamp}.csv`);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  // Aplicar anchos iniciales guardados o predeterminados
+  ths.forEach(th => {
+    const col = th.dataset.col;
+    if (!col) return;
+    const initialW = savedWidths[col] || defaultWidths[col];
+    if (initialW) {
+      th.style.width = `${initialW}px`;
+    }
+    if (minWidths[col]) {
+      th.style.minWidth = `${minWidths[col]}px`;
+    }
+  });
 
-  showToast('Resultados exportados a CSV con éxito', 'success');
+  updateTableWidth();
+
+  // Configurar cada controlador de arrastre (resizer)
+  ths.forEach(th => {
+    const resizer = th.querySelector('.col-resizer');
+    if (!resizer) return;
+
+    const col = th.dataset.col;
+
+    // Doble clic: restablecer la columna a su tamaño predeterminado
+    resizer.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      const defW = defaultWidths[col];
+      if (defW) {
+        th.style.width = `${defW}px`;
+        delete savedWidths[col];
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(savedWidths));
+        } catch (_) {}
+        updateTableWidth();
+        showToast(`Columna restaurada al ancho predeterminado`, 'info');
+      }
+    });
+
+    resizer.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const startX = e.pageX;
+      const rect = th.getBoundingClientRect();
+      const startWidth = rect.width || parseInt(th.style.width, 10) || defaultWidths[col] || 100;
+      const minW = minWidths[col] || 60;
+
+      resizer.classList.add('is-resizing');
+      document.body.classList.add('is-resizing-columns');
+
+      function onPointerMove(moveEvt) {
+        const deltaX = moveEvt.pageX - startX;
+        const newWidth = Math.max(minW, Math.round(startWidth + deltaX));
+        th.style.width = `${newWidth}px`;
+        savedWidths[col] = newWidth;
+        updateTableWidth();
+      }
+
+      function onPointerUp() {
+        resizer.classList.remove('is-resizing');
+        document.body.classList.remove('is-resizing-columns');
+        window.removeEventListener('pointermove', onPointerMove);
+        window.removeEventListener('pointerup', onPointerUp);
+
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(savedWidths));
+        } catch (err) {
+          console.warn('Error al guardar anchos:', err);
+        }
+      }
+
+      window.addEventListener('pointermove', onPointerMove);
+      window.addEventListener('pointerup', onPointerUp);
+    });
+  });
 }
 
 // ==========================================================================
-// UTILIDADES
+// EVENT LISTENERS
 // ==========================================================================
-function showToast(mensaje, tipo = 'info') {
-  const toast = document.createElement('div');
-  toast.className = `toast ${tipo}`;
-  toast.textContent = mensaje;
-  toastContainer.appendChild(toast);
+function setupEventListeners() {
+  storageTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      cambiarAlmacenamiento(tab.dataset.storage);
+    });
+  });
 
-  setTimeout(() => {
-    toast.style.opacity = '0';
-    toast.style.transform = 'translateX(30px)';
-    toast.style.transition = 'all 0.3s ease';
-    setTimeout(() => toast.remove(), 300);
-  }, 3500);
+  if (treeRootAll) {
+    treeRootAll.addEventListener('click', () => {
+      seleccionarCarpeta('', '', '', treeRootAll);
+    });
+  }
+
+  if (btnRefreshTree) {
+    btnRefreshTree.addEventListener('click', () => {
+      cacheMemoria.carpetasRaiz.clear();
+      cacheMemoria.subcarpetas.clear();
+      cacheMemoria.listados.clear();
+      cacheMemoria.busquedas.clear();
+      cargarCarpetasAlmacenamiento(currentConfig.servidorActivo, true);
+      const terminos = obtenerTerminosBusqueda();
+      if (terminos.length > 0) {
+        ejecutarBusqueda(false, true);
+      } else {
+        cargarListadoInicial(true);
+      }
+      showToast('Memoria RAM actualizada con la red', 'info');
+    });
+  }
+
+  searchInput.addEventListener('focus', () => {
+    mostrarSugerencias();
+  });
+
+  searchInput.addEventListener('click', () => {
+    mostrarSugerencias();
+  });
+
+  document.addEventListener('pointerdown', (e) => {
+    if (searchBoxWrapper && !searchBoxWrapper.contains(e.target)) {
+      ocultarSugerencias();
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (searchBoxWrapper && !searchBoxWrapper.contains(e.target)) {
+      ocultarSugerencias();
+    }
+  });
+
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (!searchSuggestionsDropdown || searchSuggestionsDropdown.classList.contains('hidden')) {
+        mostrarSugerencias();
+      } else if (sugerenciasActivas.length > 0) {
+        sugerenciaIndex = (sugerenciaIndex + 1) % sugerenciasActivas.length;
+        actualizarHighlightSugerencias();
+      }
+      return;
+    }
+
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (sugerenciasActivas.length > 0) {
+        sugerenciaIndex = (sugerenciaIndex - 1 + sugerenciasActivas.length) % sugerenciasActivas.length;
+        actualizarHighlightSugerencias();
+      }
+      return;
+    }
+
+    if (e.key === 'Escape') {
+      if (searchSuggestionsDropdown && !searchSuggestionsDropdown.classList.contains('hidden')) {
+        e.preventDefault();
+        ocultarSugerencias();
+        return;
+      }
+      limpiarBusqueda();
+      return;
+    }
+
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (sugerenciaIndex >= 0 && sugerenciaIndex < sugerenciasActivas.length && searchSuggestionsDropdown && !searchSuggestionsDropdown.classList.contains('hidden')) {
+        seleccionarSugerencia(sugerenciasActivas[sugerenciaIndex].texto);
+        return;
+      }
+      const val = searchInput.value.trim();
+      if (val) {
+        agregarChip(val);
+        searchInput.value = '';
+      }
+      ocultarSugerencias();
+      clearTimeout(searchDebounceTimer);
+      ejecutarBusqueda();
+      return;
+    }
+
+    if (e.key === ' ') {
+      e.preventDefault();
+      const val = searchInput.value.trim();
+      if (val) {
+        agregarChip(val);
+        searchInput.value = '';
+      }
+      ocultarSugerencias();
+      clearTimeout(searchDebounceTimer);
+      ejecutarBusqueda();
+      return;
+    }
+
+    if (e.key === 'Backspace' && searchInput.value === '' && searchChips.length > 0) {
+      e.preventDefault();
+      searchChips.pop();
+      renderChips();
+      ejecutarBusqueda();
+    }
+  });
+
+  searchInput.addEventListener('paste', (e) => {
+    const pasteText = (e.clipboardData || window.clipboardData).getData('text');
+    if (pasteText && /\s/.test(pasteText.trim())) {
+      e.preventDefault();
+      const palabras = pasteText.trim().split(/\s+/);
+      palabras.forEach(p => agregarChip(p));
+      searchInput.value = '';
+      actualizarBotonLimpiar();
+      ocultarSugerencias();
+      ejecutarBusqueda();
+    }
+  });
+
+  searchInput.addEventListener('input', () => {
+    actualizarBotonLimpiar();
+    mostrarSugerencias();
+    clearTimeout(searchDebounceTimer);
+    const val = searchInput.value.trim();
+
+    if (val.length >= 2 || searchChips.length > 0) {
+      searchDebounceTimer = setTimeout(() => {
+        ejecutarBusqueda(true);
+      }, 250);
+    } else if (val.length === 0 && searchChips.length === 0) {
+      cargarListadoInicial();
+    }
+  });
+
+  btnExecSearch.addEventListener('click', () => {
+    const texto = searchInput.value.trim();
+    if (texto) {
+      agregarChip(texto);
+      searchInput.value = '';
+    }
+    ejecutarBusqueda();
+  });
+
+  btnClearSearch.addEventListener('click', limpiarBusqueda);
+
+  if (filterDelegacionInput) {
+    filterDelegacionInput.addEventListener('input', () => {
+      const q = filterDelegacionInput.value.toLowerCase().trim();
+      const filtradas = carpetasList.filter(c => {
+        const nombre = typeof c === 'string' ? c : c.nombre;
+        return nombre.toLowerCase().includes(q);
+      });
+      renderizarArbolCarpetas(filtradas);
+    });
+  }
+
+
+
+  document.querySelectorAll('.ex-chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      searchChips = [];
+      const partes = btn.dataset.example.split(/\s+/);
+      partes.forEach(p => agregarChip(p));
+      ejecutarBusqueda();
+      searchInput.focus();
+    });
+  });
+
+  selectMaxResults.addEventListener('change', () => {
+    currentConfig.limiteResultados = parseInt(selectMaxResults.value, 10);
+    ejecutarBusqueda();
+  });
+
+  if (chkSearchInPath) {
+    chkSearchInPath.addEventListener('change', () => {
+      ejecutarBusqueda();
+    });
+  }
+
+  btnQuickVerify.addEventListener('click', async () => {
+    const ok = await verificarEstadoRed();
+    if (ok) {
+      showToast('Conexión con servidores verificada', 'success');
+      cargarListadoInicial();
+    }
+  });
+
+  btnOpenSettings.addEventListener('click', () => {
+    modalSettings.style.display = 'flex';
+  });
+  btnCloseSettings.addEventListener('click', () => {
+    modalSettings.style.display = 'none';
+  });
+  modalSettings.addEventListener('click', (e) => {
+    if (e.target === modalSettings) modalSettings.style.display = 'none';
+  });
+
+  if (btnBrowseIrec) {
+    btnBrowseIrec.addEventListener('click', async () => {
+      const seleccion = await window.electronAPI.seleccionarCarpeta();
+      if (seleccion) cfgRutaIrec.value = seleccion;
+    });
+  }
+
+  if (btnBrowseSsdirec) {
+    btnBrowseSsdirec.addEventListener('click', async () => {
+      const seleccion = await window.electronAPI.seleccionarCarpeta();
+      if (seleccion) cfgRutaSsdirec.value = seleccion;
+    });
+  }
+
+  const btnToggleDevTools = document.getElementById('btn-toggle-devtools');
+  if (btnToggleDevTools) {
+    btnToggleDevTools.addEventListener('click', () => {
+      window.electronAPI.toggleDevTools();
+    });
+  }
+
+  btnSaveSettings.addEventListener('click', async () => {
+    const nuevaRutaIrec = cfgRutaIrec.value.trim();
+    const nuevaRutaSsdirec = cfgRutaSsdirec.value.trim();
+    const nuevoTimeout = parseInt(cfgTimeout.value, 10) || 45000;
+
+    currentConfig.rutaIrec = nuevaRutaIrec;
+    currentConfig.rutaSsdirec = nuevaRutaSsdirec;
+    currentConfig.tiempoLimiteMs = nuevoTimeout;
+
+    await window.electronAPI.guardarConfig({
+      servidorActivo: currentConfig.servidorActivo,
+      rutaIrec: nuevaRutaIrec,
+      rutaSsdirec: nuevaRutaSsdirec,
+      tiempoLimiteMs: nuevoTimeout
+    });
+
+    modalSettings.style.display = 'none';
+    showToast('Ajustes de red guardados correctamente', 'success');
+
+    actualizarRutaSidebar();
+    await verificarEstadoRed();
+    await cargarCarpetasAlmacenamiento(currentConfig.servidorActivo);
+    cargarListadoInicial();
+  });
 }
 
-function escapeHtml(text) {
-  if (!text) return '';
-  return text
-    .toString()
+function resaltarPalabras(texto, palabras) {
+  if (!palabras || palabras.length === 0 || !texto) return escapeHtml(texto);
+
+  let resultado = escapeHtml(texto);
+  palabras.forEach(palabra => {
+    if (!palabra || palabra.length < 1) return;
+    const regex = new RegExp(`(${escapeRegExp(palabra)})`, 'gi');
+    resultado = resultado.replace(regex, '<mark>$1</mark>');
+  });
+
+  return resultado;
+}
+
+function escapeHtml(str) {
+  if (str === undefined || str === null) return '';
+  return String(str)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -679,22 +1411,31 @@ function escapeHtml(text) {
     .replace(/'/g, '&#039;');
 }
 
-function resaltarPalabras(texto, palabras) {
-  if (!texto) return '';
-  if (!palabras || palabras.length === 0) return escapeHtml(texto);
-
-  // Escapar HTML base
-  let safe = escapeHtml(texto);
-
-  palabras.forEach(w => {
-    if (!w || w.length < 2) return;
-    const regex = new RegExp(`(${escapeRegex(w)})`, 'gi');
-    safe = safe.replace(regex, '<mark class="hl">$1</mark>');
-  });
-
-  return safe;
+function escapeRegExp(string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function escapeRegex(string) {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function showToast(mensaje, tipo = 'info') {
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${tipo}`;
+
+  let icono = 'ℹ️';
+  if (tipo === 'success') icono = '✅';
+  if (tipo === 'error') icono = '❌';
+
+  toast.innerHTML = `
+    <span class="toast-icon">${icono}</span>
+    <span class="toast-message">${escapeHtml(mensaje)}</span>
+  `;
+
+  toastContainer.appendChild(toast);
+
+  setTimeout(() => {
+    toast.classList.add('toast-fadeout');
+    setTimeout(() => {
+      if (toastContainer.contains(toast)) {
+        toastContainer.removeChild(toast);
+      }
+    }, 300);
+  }, 3200);
 }

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,47 +8,25 @@
   <link rel="icon" type="image/png" href="icon.png">
   <link rel="stylesheet" href="styles.css">
 </head>
-<body>
-  <div class="app-container">
-    <!-- Barra Superior / Header -->
-    <header class="app-header">
-      <div class="header-brand">
-        <div class="logo-icon">
-          <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-            <polyline points="14 2 14 8 20 8"></polyline>
-            <line x1="16" y1="13" x2="8" y2="13"></line>
-            <line x1="16" y1="17" x2="8" y2="17"></line>
-            <polyline points="10 9 9 9 8 9"></polyline>
-          </svg>
-        </div>
-        <div class="brand-text">
-          <h1>IREC <span>Buscador</span></h1>
-          <p class="brand-subtitle">Servidor de Respaldo Original</p>
-        </div>
-      </div>
 
-      <div class="header-center">
+<body class="theme-light">
+  <div class="app-container">
+    <!-- Barra Superior / Header (Navbar limpia: solo estado de conexión y ajustes) -->
+    <header class="app-header">
+      <div class="header-left">
         <div id="connection-status" class="status-pill checking">
           <span class="status-dot"></span>
-          <span id="status-text">Verificando red...</span>
+          <span id="status-text">Verificando servidores...</span>
         </div>
       </div>
 
       <div class="header-actions">
-        <button id="btn-export-csv" class="btn-header" title="Exportar resultados a CSV" disabled>
-          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="7 10 12 15 17 10"></polyline>
-            <line x1="12" y1="15" x2="12" y2="3"></line>
-          </svg>
-          <span>Exportar</span>
-        </button>
-
-        <button id="btn-open-settings" class="btn-header" title="Configuración de Red y Búsqueda">
+        <button id="btn-open-settings" class="btn-header" title="Configuración de Servidores y Búsqueda">
           <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
             <circle cx="12" cy="12" r="3"></circle>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            <path
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+            </path>
           </svg>
           <span>Ajustes</span>
         </button>
@@ -56,13 +35,49 @@
 
     <!-- Contenedor Principal (Sidebar + Workspace) -->
     <div class="app-body">
-      <!-- Sidebar Izquierdo -->
+      <!-- Sidebar Izquierdo: Explorador de Archivos -->
       <aside class="app-sidebar">
-        <!-- Delegaciones -->
-        <div class="sidebar-section">
+        <!-- Selector de Servidor / Almacenamiento -->
+        <div class="storage-selector-zone">
+          <span class="section-title">ALMACENAMIENTO DE RED</span>
+          <div class="storage-tabs">
+            <button type="button" class="storage-tab active" data-storage="irec"
+              title="Buscar en toda la carpeta irec (\\172.40.5.84\irec)">
+              <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+              </svg>
+              <span>irec</span>
+            </button>
+            <button type="button" class="storage-tab" data-storage="ssdirec"
+              title="Buscar en servidor rápido ssdirec (\\172.40.5.84\ssdirec)">
+              <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+              </svg>
+              <span>ssdirec</span>
+            </button>
+            <button type="button" class="storage-tab" data-storage="ambos" title="Buscar en ambos simultáneamente">
+              <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="2" y1="12" x2="22" y2="12"></line>
+              </svg>
+              <span>Ambos</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Explorador de Archivos / Carpetas (Tree View con Scroll) -->
+        <div class="sidebar-section explorer-section">
           <div class="sidebar-section-header">
-            <span class="section-title">DELEGACIONES</span>
-            <span id="delegaciones-count" class="badge-count">19</span>
+            <span class="section-title" id="folders-section-title">EXPLORADOR DE CARPETAS</span>
+            <div class="explorer-actions">
+              <button id="btn-refresh-tree" class="btn-refresh-pill" title="Actualizar carpetas desde la red">
+                <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.2" fill="none">
+                  <polyline points="23 4 23 10 17 10"></polyline>
+                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                </svg>
+                <span>Actualizar</span>
+              </button>
+            </div>
           </div>
 
           <div class="delegaciones-filter-box">
@@ -70,38 +85,29 @@
               <circle cx="11" cy="11" r="8"></circle>
               <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
             </svg>
-            <input type="text" id="filter-delegacion-input" placeholder="Filtrar delegación...">
+            <input type="text" id="filter-delegacion-input" placeholder="Filtrar carpetas...">
           </div>
 
-          <ul id="delegaciones-list" class="delegaciones-menu">
-            <li class="delegacion-item active" data-delegacion="">
-              <span class="del-bullet all"></span>
-              <span class="del-name">Todas las Delegaciones</span>
-            </li>
-            <!-- Las delegaciones se cargarán dinámicamente -->
-          </ul>
-        </div>
-
-        <!-- Filtros Rápidos -->
-        <div class="sidebar-section">
-          <div class="sidebar-section-header">
-            <span class="section-title">ETIQUETAS RÁPIDAS</span>
-          </div>
-          <div class="quick-tags-container">
-            <button class="quick-tag" data-query="LIBROS Y SELLOS">Libros y Sellos</button>
-            <button class="quick-tag" data-query="LoteLibrosss">LoteLibrosss</button>
-            <button class="quick-tag" data-query="2026">2026</button>
-            <button class="quick-tag" data-query="2004">2004</button>
-            <button class="quick-tag" data-query="1788">1788</button>
+          <!-- Árbol de carpetas con SCROLL vertical fluido -->
+          <div class="explorer-tree-wrapper" id="explorer-tree-wrapper">
+            <div class="tree-item tree-root-item active" id="tree-root-all" data-path="" data-subruta=""
+              data-nombre="Todo el almacenamiento">
+              <span class="tree-toggle-spacer"></span>
+              <span class="tree-folder-emoji">&#128193;</span>
+              <span class="tree-label" id="all-folders-label">Todo el almacenamiento</span>
+            </div>
+            <div id="explorer-tree" class="explorer-tree-nodes">
+              <!-- Nodos generados dinámicamente con carpetas e iconos -->
+            </div>
           </div>
         </div>
 
         <!-- Estado de Red / Ruta activa -->
         <div class="sidebar-footer">
           <div class="network-info-card">
-            <div class="net-title">Ruta Conectada</div>
-            <div id="sidebar-current-path" class="net-path" title="\\172.40.5.84\irec\Respaldo_Original">
-              \\172.40.5.84\irec\Respaldo_Original
+            <div class="net-title">Ruta Activa</div>
+            <div id="sidebar-current-path" class="net-path" title="\\172.40.5.84\irec">
+              \\172.40.5.84\irec
             </div>
             <button id="btn-quick-verify" class="btn-net-verify">Comprobar Acceso</button>
           </div>
@@ -110,28 +116,25 @@
 
       <!-- Panel Central / Workspace -->
       <main class="app-main">
-        <!-- Barra de Búsqueda Principal -->
+        <!-- Barra de Búsqueda Principal con Badges / Chips -->
         <div class="search-command-zone">
           <div class="search-box-wrapper">
-            <div class="search-input-container">
+            <div class="search-input-container" id="search-input-box">
               <div class="search-icon-left">
-                <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="2.2" fill="none">
+                <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2.2" fill="none">
                   <circle cx="11" cy="11" r="8"></circle>
                   <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                 </svg>
               </div>
 
-              <input
-                type="text"
-                id="search-input"
-                class="search-input"
-                placeholder="Buscar archivos por varias palabras (ej: 2004 1788 lote)..."
-                autocomplete="off"
-                spellcheck="false"
-                autofocus
-              >
+              <!-- Lista dinámica de chips/badges que se generan con [Espacio] o [Enter] -->
+              <div class="chips-list" id="chips-list"></div>
 
-              <button id="btn-clear-search" class="btn-clear-input" title="Limpiar búsqueda (Esc)" style="display: none;">
+              <input type="text" id="search-input" class="search-input-field"
+                placeholder="Escribe palabras clave y presiona [Espacio] o [Enter] (ej. 2004 1788)..."
+                autocomplete="off" spellcheck="false">
+
+              <button id="btn-clear-search" class="btn-clear-input" title="Borrar búsqueda" style="display: none;">
                 <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
                   <line x1="18" y1="6" x2="6" y2="18"></line>
                   <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -139,31 +142,27 @@
               </button>
 
               <button id="btn-exec-search" class="btn-search-action">
-                <span class="btn-text">Buscar</span>
-                <kbd class="btn-shortcut">Enter</kbd>
+                <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2.5" fill="none">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <span>Buscar</span>
               </button>
+            </div>
+
+            <!-- Menú Desplegable de Opciones y Sugerencias Estilo Google -->
+            <div id="search-suggestions-dropdown" class="search-suggestions-dropdown hidden">
+              <!-- Sugerencias dinámicas añadidas aquí -->
             </div>
           </div>
 
           <!-- Barra de Filtros y Opciones Secundarias -->
           <div class="search-toolbar">
             <div class="toolbar-group">
-              <span class="toolbar-label">Modo:</span>
-              <div class="toggle-group" id="match-mode-group">
-                <button type="button" class="toggle-btn active" data-mode="todas" title="El archivo debe coincidir con TODAS las palabras (AND)">
-                  Todas las palabras (AND)
-                </button>
-                <button type="button" class="toggle-btn" data-mode="cualquiera" title="El archivo coincide si tiene CUALQUIERA de las palabras (OR)">
-                  Cualquiera (OR)
-                </button>
-              </div>
-            </div>
-
-            <div class="toolbar-group">
-              <label class="custom-checkbox" title="Permite que las palabras se encuentren en los nombres de las carpetas contenedor">
-                <input type="checkbox" id="check-search-in-path" checked>
+              <label class="custom-checkbox" title="Buscar también dentro de los nombres de carpetas en la ruta">
+                <input type="checkbox" id="chk-search-in-path" checked>
                 <span class="checkbox-indicator"></span>
-                <span class="checkbox-label">Buscar también en carpetas/ruta</span>
+                <span class="checkbox-label">Incluir subcarpetas en coincidencia</span>
               </label>
             </div>
 
@@ -181,10 +180,9 @@
             <div class="toolbar-group active-delegacion-badge" id="active-del-indicator">
               <span class="active-del-pill">
                 <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none">
-                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-                  <circle cx="12" cy="10" r="3"></circle>
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
                 </svg>
-                <span id="active-del-name">Todas las Delegaciones</span>
+                <span id="active-del-name">Todo irec</span>
               </span>
             </div>
           </div>
@@ -195,7 +193,7 @@
           <div class="kpi-left">
             <div class="kpi-counter">
               <span id="kpi-total" class="kpi-number">0</span>
-              <span class="kpi-text">archivos encontrados</span>
+              <span class="kpi-text">archivos listados</span>
             </div>
             <div class="kpi-divider"></div>
             <div class="kpi-time">
@@ -222,15 +220,17 @@
                 <path d="M8 11h6"></path>
               </svg>
             </div>
-            <h2>Buscador Ultrarrápido de Expedientes</h2>
-            <p>Escribe una o varias palabras para localizar archivos PDF en el servidor IREC.</p>
+            <h2>Buscador de Expedientes IREC</h2>
+            <p>Escribe una o varias palabras para localizar archivos PDF en los servidores <strong>irec</strong> y
+              <strong>ssdirec</strong>, o selecciona una carpeta en el explorador lateral.
+            </p>
             <div class="examples-card">
               <span class="examples-title">Ejemplos de búsqueda:</span>
               <div class="example-chips">
                 <button class="ex-chip" data-example="2004 1788">2004 1788</button>
                 <button class="ex-chip" data-example="Tuxtla 2004">Tuxtla 2004</button>
                 <button class="ex-chip" data-example="LoteLibrosss 2004 1788">LoteLibrosss 2004 1788</button>
-                <button class="ex-chip" data-example="20260623 2004">20260623 2004</button>
+                <button class="ex-chip" data-example="ENTREGABLES PROCESADOS FINANZAS">Finanzas</button>
               </div>
             </div>
           </div>
@@ -238,8 +238,8 @@
           <!-- Estado Cargando / Escaneando -->
           <div id="state-loading" class="loading-state" style="display: none;">
             <div class="loader-spinner"></div>
-            <h3 id="loading-title">Buscando expedientes en la red...</h3>
-            <p id="loading-details">Escaneando directorios en tiempo real...</p>
+            <h3 id="loading-title">Cargando expedientes...</h3>
+            <p id="loading-details">Accediendo al servidor de red...</p>
             <div class="loading-progress-bar">
               <div class="progress-bar-inner"></div>
             </div>
@@ -255,30 +255,39 @@
               </svg>
             </div>
             <h2>No se encontraron archivos coincidentes</h2>
-            <p id="no-results-desc">No se encontraron expedientes con las palabras especificadas en la delegación seleccionada.</p>
+            <p id="no-results-desc">No se encontraron expedientes con las etiquetas de búsqueda indicadas.</p>
             <div class="no-results-suggestions">
               <strong>Sugerencias:</strong>
               <ul>
-                <li>Verifica que los números o palabras estén bien escritos.</li>
-                <li>Cambia la delegación a <em>"Todas las Delegaciones"</em> si no estás seguro de la ubicación.</li>
-                <li>Cambia el modo de coincidencia a <em>"Cualquiera (OR)"</em> para resultados más amplios.</li>
-                <li>Verifica que la opción <em>"Buscar también en carpetas/ruta"</em> esté marcada.</li>
+                <li>Verifica que los números o nombres de lotes estén bien escritos.</li>
+                <li>Prueba seleccionando una carpeta específica en el Explorador de la izquierda.</li>
+                <li>Cambia el almacenamiento a <em>"ssdirec"</em> o <em>"Ambos"</em> según corresponda.</li>
               </ul>
             </div>
           </div>
 
-          <!-- Lista de Resultados -->
+          <!-- Lista de Resultados (Tabla interactiva) -->
           <div id="results-table-container" class="results-table-wrapper" style="display: none;">
-            <table class="results-table">
+            <table class="results-table" id="results-table">
               <thead>
                 <tr>
-                  <th class="col-icon"></th>
-                  <th class="col-name">Nombre del Archivo</th>
-                  <th class="col-del">Delegación</th>
-                  <th class="col-path">Ubicación / Carpeta</th>
-                  <th class="col-size">Tamaño</th>
-                  <th class="col-date">Modificación</th>
-                  <th class="col-actions">Acciones</th>
+                  <th class="col-icon" data-col="icon"></th>
+                  <th class="col-name" data-col="name">
+                    <span>Nombre del Archivo</span>
+                    <div class="col-resizer" title="Arrastrar para redimensionar columna"></div>
+                  </th>
+                  <th class="col-del" data-col="del">
+                    <span>Carpeta / Delegación</span>
+                    <div class="col-resizer" title="Arrastrar para redimensionar columna"></div>
+                  </th>
+                  <th class="col-path" data-col="path">
+                    <span>Ubicación Completa</span>
+                    <div class="col-resizer" title="Arrastrar para redimensionar columna"></div>
+                  </th>
+                  <th class="col-actions" data-col="actions">
+                    <span>Acciones</span>
+                    <div class="col-resizer" title="Arrastrar para redimensionar columna"></div>
+                  </th>
                 </tr>
               </thead>
               <tbody id="results-tbody">
@@ -290,104 +299,63 @@
       </main>
     </div>
 
-    <!-- Modal de Vista Previa / Detalle -->
-    <div id="modal-preview" class="modal-overlay" style="display: none;">
-      <div class="modal-card modal-lg">
-        <div class="modal-header">
-          <div class="modal-title-box">
-            <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-              <polyline points="14 2 14 8 20 8"></polyline>
-            </svg>
-            <span id="preview-filename">Archivo.pdf</span>
-          </div>
-          <button id="btn-close-preview" class="btn-modal-close">&times;</button>
-        </div>
-        <div class="modal-body">
-          <div class="preview-meta-grid">
-            <div class="meta-item">
-              <span class="meta-label">Delegación:</span>
-              <span id="preview-delegacion" class="meta-value">-</span>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">Tamaño:</span>
-              <span id="preview-size" class="meta-value">-</span>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">Fecha:</span>
-              <span id="preview-date" class="meta-value">-</span>
-            </div>
-            <div class="meta-item full-width">
-              <span class="meta-label">Ruta de Red UNC:</span>
-              <div class="unc-box">
-                <input type="text" id="preview-unc-input" readonly>
-                <button id="btn-copy-preview-unc" class="btn-sm">Copiar</button>
-              </div>
-            </div>
-          </div>
-          <div class="preview-viewer-container">
-            <iframe id="preview-iframe" src="" frameborder="0"></iframe>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button id="btn-open-os-modal" class="btn-primary">
-            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
-              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-              <polyline points="15 3 21 3 21 9"></polyline>
-              <line x1="10" y1="14" x2="21" y2="3"></line>
-            </svg>
-            Abrir en Lector PDF
-          </button>
-          <button id="btn-open-folder-modal" class="btn-secondary">
-            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-            </svg>
-            Mostrar en Carpeta
-          </button>
-        </div>
-      </div>
-    </div>
-
     <!-- Modal de Configuración -->
     <div id="modal-settings" class="modal-overlay" style="display: none;">
       <div class="modal-card">
         <div class="modal-header">
-          <h3>Configuración del Buscador</h3>
+          <h3>Configuración de Servidores IREC</h3>
           <button id="btn-close-settings" class="btn-modal-close">&times;</button>
         </div>
         <div class="modal-body">
           <div class="settings-form-group">
-            <label for="cfg-ruta-base">Ruta Base del Servidor / Red:</label>
+            <label for="cfg-ruta-irec">Ruta Servidor Principal (irec):</label>
             <div class="input-with-browse">
-              <input type="text" id="cfg-ruta-base" placeholder="\\172.40.5.84\irec\Respaldo_Original">
-              <button id="btn-browse-folder" class="btn-secondary" title="Examinar carpeta">Examinar</button>
+              <input type="text" id="cfg-ruta-irec" placeholder="\\172.40.5.84\irec">
+              <button id="btn-browse-irec" class="btn-secondary" title="Examinar carpeta">Examinar</button>
             </div>
-            <span class="input-help">Ruta UNC compartida en la red local donde se almacenan las carpetas de delegaciones.</span>
+            <span class="input-help">Carpeta compartida principal con Respaldo_Original, Libros, Notarías, etc.</span>
           </div>
 
           <div class="settings-form-group">
-            <label for="cfg-profundidad">Profundidad Máxima de Carpetas:</label>
-            <input type="number" id="cfg-profundidad" min="1" max="10" value="6">
-            <span class="input-help">Nivel de subcarpetas en el que buscar archivos PDF (por defecto 6).</span>
+            <label for="cfg-ruta-ssdirec">Ruta Servidor Rápido (ssdirec):</label>
+            <div class="input-with-browse">
+              <input type="text" id="cfg-ruta-ssdirec" placeholder="\\172.40.5.84\ssdirec">
+              <button id="btn-browse-ssdirec" class="btn-secondary" title="Examinar carpeta">Examinar</button>
+            </div>
+            <span class="input-help">Unidad de almacenamiento rápido con Entregables, Finanzas y PDFs raíz.</span>
           </div>
 
           <div class="settings-form-group">
-            <label for="cfg-timeout">Tiempo Límite de Búsqueda (segundos):</label>
-            <input type="number" id="cfg-timeout" min="10" max="120" value="45">
-            <span class="input-help">Evita que la búsqueda se congele si la red experimenta lentitud.</span>
+            <label for="cfg-timeout">Tiempo límite de búsqueda:</label>
+            <select id="cfg-timeout" class="custom-select">
+              <option value="15000">15 segundos (Rápido)</option>
+              <option value="30000">30 segundos</option>
+              <option value="45000" selected>45 segundos (Recomendado)</option>
+              <option value="60000">60 segundos (Búsqueda profunda)</option>
+            </select>
+          </div>
+
+          <div class="settings-form-group"
+            style="margin-top: 14px; padding-top: 12px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <label style="margin-bottom: 2px;">Consola de Errores (DevTools):</label>
+              <span class="input-help" style="margin-top: 0;">Presiona F12 o abre la consola directamente</span>
+            </div>
+            <button id="btn-toggle-devtools" class="btn-secondary" type="button"
+              style="padding: 6px 14px; font-size: 12px;">Abrir Consola</button>
           </div>
         </div>
         <div class="modal-footer">
-          <button id="btn-test-connection" class="btn-secondary">Probar Conexión</button>
-          <button id="btn-save-settings" class="btn-primary">Guardar Ajustes</button>
+          <button id="btn-save-settings" class="btn-primary">Guardar Configuración</button>
         </div>
       </div>
     </div>
 
-    <!-- Toast Notifications Container -->
+    <!-- Sistema de Notificaciones Toast -->
     <div id="toast-container" class="toast-container"></div>
   </div>
 
   <script src="renderer.js"></script>
 </body>
+
 </html>
