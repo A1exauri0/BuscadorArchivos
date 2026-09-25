@@ -1,6 +1,6 @@
 # Buscador de Expedientes y Archivos - IREC (Electron Desktop App)
 
-Aplicación de escritorio moderna, ultrarrápida y con interfaz oscura de alta fidelidad, diseñada para buscar, filtrar y previsualizar archivos PDF en el servidor de red local (`\\172.40.5.84\irec\Respaldo_Original`).
+Aplicación de escritorio moderna, ultrarrápida y con interfaz visual de alta fidelidad, diseñada para buscar, filtrar y abrir expedientes PDF en el servidor de red local (`\\172.40.5.84\ssdirec\ENTREGABLES PROCESADOS FINANZAS`).
 
 ---
 

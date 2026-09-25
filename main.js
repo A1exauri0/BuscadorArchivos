@@ -6,12 +6,12 @@ const searchEngine = require('./searchEngine');
 let mainWindow = null;
 
 const DEFAULT_CONFIG = {
-  servidorActivo: 'irec',
+  ubicacionActiva: 'entregables',
   rutaIrec: '\\\\172.40.5.84\\irec',
   rutaSsdirec: '\\\\172.40.5.84\\ssdirec',
-  rutaBase: '\\\\172.40.5.84\\irec',
+  rutaEntregables: '\\\\172.40.5.84\\ssdirec\\ENTREGABLES PROCESADOS FINANZAS',
   limiteResultados: 200,
-  profundidadMaxima: 6,
+  profundidadMaxima: 8,
   tiempoLimiteMs: 45000,
   buscarEnRuta: true,
   extensiones: ['pdf']
@@ -26,7 +26,8 @@ function cargarConfig() {
     const configPath = getConfigPath();
     if (fs.existsSync(configPath)) {
       const data = fs.readFileSync(configPath, 'utf8');
-      return { ...DEFAULT_CONFIG, ...JSON.parse(data) };
+      const parsed = JSON.parse(data);
+      return { ...DEFAULT_CONFIG, ...parsed };
     }
   } catch (err) {
     console.error('Error cargando configuración:', err);
@@ -53,7 +54,7 @@ function createWindow() {
     minWidth: 1080,
     minHeight: 700,
     backgroundColor: '#f8fafc',
-    title: 'Buscador de Expedientes y Archivos - IREC',
+    title: 'Buscador de Expedientes - ENTREGABLES PROCESADOS FINANZAS',
     icon: path.join(__dirname, 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -83,7 +84,14 @@ function createWindow() {
 // IPC Handlers
 ipcMain.handle('buscar-archivos', async (event, options) => {
   try {
-    return await searchEngine.buscarArchivos(options);
+    const cfg = cargarConfig();
+    return await searchEngine.buscarArchivos({
+      rutaIrec: cfg.rutaIrec,
+      rutaSsdirec: cfg.rutaSsdirec,
+      rutaEntregables: cfg.rutaEntregables,
+      ubicacion: options?.ubicacion || cfg.ubicacionActiva || 'entregables',
+      ...options
+    });
   } catch (err) {
     return {
       total: 0,
@@ -98,7 +106,14 @@ ipcMain.handle('buscar-archivos', async (event, options) => {
 
 ipcMain.handle('listar-archivos-iniciales', async (event, options) => {
   try {
-    return await searchEngine.listarArchivosIniciales(options);
+    const cfg = cargarConfig();
+    return await searchEngine.listarArchivosIniciales({
+      rutaIrec: cfg.rutaIrec,
+      rutaSsdirec: cfg.rutaSsdirec,
+      rutaEntregables: cfg.rutaEntregables,
+      ubicacion: options?.ubicacion || cfg.ubicacionActiva || 'entregables',
+      ...options
+    });
   } catch (err) {
     return {
       ok: false,
@@ -110,24 +125,39 @@ ipcMain.handle('listar-archivos-iniciales', async (event, options) => {
 });
 
 ipcMain.handle('obtener-carpetas', async (event, options) => {
-  return await searchEngine.obtenerCarpetas(options);
+  const cfg = cargarConfig();
+  return await searchEngine.obtenerCarpetas({
+    rutaIrec: cfg.rutaIrec,
+    rutaSsdirec: cfg.rutaSsdirec,
+    rutaEntregables: cfg.rutaEntregables,
+    ubicacion: options?.ubicacion || cfg.ubicacionActiva || 'entregables',
+    ...options
+  });
 });
 
 ipcMain.handle('verificar-servidores', async (event, rutas) => {
-  return await searchEngine.verificarServidores(rutas);
+  const cfg = cargarConfig();
+  return await searchEngine.verificarServidores({
+    rutaIrec: rutas?.rutaIrec || cfg.rutaIrec,
+    rutaSsdirec: rutas?.rutaSsdirec || cfg.rutaSsdirec,
+    rutaEntregables: rutas?.rutaEntregables || cfg.rutaEntregables
+  });
 });
 
 ipcMain.handle('obtener-delegaciones', async (event, rutaBase) => {
-  return await searchEngine.obtenerDelegaciones(rutaBase);
+  const cfg = cargarConfig();
+  return await searchEngine.obtenerDelegaciones(rutaBase || cfg.rutaEntregables);
 });
 
 ipcMain.handle('obtener-subcarpetas', async (event, args) => {
-  const { rutaBase, delegacion, subruta, rutaCompleta } = args || {};
-  return await searchEngine.obtenerSubcarpetas(rutaBase, delegacion, subruta, rutaCompleta);
+  const cfg = cargarConfig();
+  const rutaBase = (args && args.rutaBase) || cfg.rutaEntregables;
+  return await searchEngine.obtenerSubcarpetas(args ? { ...args, rutaBase } : { rutaBase });
 });
 
 ipcMain.handle('verificar-ruta', async (event, ruta) => {
-  return await searchEngine.verificarRuta(ruta);
+  const cfg = cargarConfig();
+  return await searchEngine.verificarRuta(ruta || cfg.rutaEntregables);
 });
 
 ipcMain.handle('abrir-archivo', async (event, rutaCompleta) => {

@@ -1,15 +1,15 @@
 // ==========================================================================
-// RENDERER PROCESS - BUSCADOR DE ARCHIVOS IREC (SOPORTE DUAL: IREC + SSDIREC)
-// Explorador de Archivos / Apertura Directa PDF / Navbar Limpia
+// RENDERER PROCESS - BUSCADOR DE ARCHIVOS ENTREGABLES FINANZAS
+// Explorador de Entregas / Apertura Directa PDF / Navbar Limpia
 // ==========================================================================
 
 let currentConfig = {
-  servidorActivo: 'irec',
+  ubicacionActiva: 'entregables',
   rutaIrec: '\\\\172.40.5.84\\irec',
   rutaSsdirec: '\\\\172.40.5.84\\ssdirec',
-  rutaBase: '\\\\172.40.5.84\\irec',
+  rutaEntregables: '\\\\172.40.5.84\\ssdirec\\ENTREGABLES PROCESADOS FINANZAS',
   limiteResultados: 200,
-  profundidadMaxima: 6,
+  profundidadMaxima: 8,
   tiempoLimiteMs: 45000,
   buscarEnRuta: true
 };
@@ -19,16 +19,15 @@ let currentRutaCompleta = '';
 let carpetasList = [];
 let ultimosResultados = [];
 let searchChips = [];
-let searchDebounceTimer = null;
 
 // ==========================================================================
 // MEMORIA RAM CACHÉ (ALMACENAMIENTO RÁPIDO PARA RESPUESTAS INSTANTÁNEAS A 0ms)
 // ==========================================================================
 const cacheMemoria = {
-  carpetasRaiz: new Map(), // almacenamiento -> carpetas[]
-  subcarpetas: new Map(),  // rutaBase:::subruta -> subcarpetas[]
-  listados: new Map(),     // alm:::carpeta:::rutaCompleta:::limite -> resultado
-  busquedas: new Map()     // alm:::carpeta:::rutaCompleta:::terminos:::limite -> resultado
+  carpetasRaiz: new Map(), // ubicacion -> carpetas[]
+  subcarpetas: new Map(),  // cacheKey -> subcarpetas[]
+  listados: new Map(),     // cacheKey -> resultado
+  busquedas: new Map()     // cacheKey -> resultado
 };
 
 function obtenerClaseTamanoTexto(texto) {
@@ -40,12 +39,8 @@ function obtenerClaseTamanoTexto(texto) {
 }
 
 // DOM Elements
-const storageTabs = document.querySelectorAll('.storage-tab');
 const foldersSectionTitle = document.getElementById('folders-section-title');
 const allFoldersLabel = document.getElementById('all-folders-label');
-
-const bcServerBadge = document.getElementById('bc-server-badge');
-const bcFolderName = document.getElementById('bc-folder-name');
 
 const searchBoxWrapper = document.getElementById('search-box-wrapper');
 const searchSuggestionsDropdown = document.getElementById('search-suggestions-dropdown');
@@ -261,21 +256,105 @@ const modalSettings = document.getElementById('modal-settings');
 const btnCloseSettings = document.getElementById('btn-close-settings');
 const cfgRutaIrec = document.getElementById('cfg-ruta-irec');
 const cfgRutaSsdirec = document.getElementById('cfg-ruta-ssdirec');
-const cfgTimeout = document.getElementById('cfg-timeout');
+const cfgRutaEntregables = document.getElementById('cfg-ruta-entregables');
 const btnBrowseIrec = document.getElementById('btn-browse-irec');
 const btnBrowseSsdirec = document.getElementById('btn-browse-ssdirec');
+const btnBrowseEntregables = document.getElementById('btn-browse-entregables');
+const cfgTimeout = document.getElementById('cfg-timeout');
 const btnSaveSettings = document.getElementById('btn-save-settings');
 
 const toastContainer = document.getElementById('toast-container');
 
-document.addEventListener('DOMContentLoaded', async () => {
+function getRutaBaseActual() {
+  const ubi = currentConfig.ubicacionActiva || 'entregables';
+  if (ubi === 'irec') return currentConfig.rutaIrec;
+  if (ubi === 'ssdirec') return currentConfig.rutaSsdirec;
+  if (ubi === 'entregables') return currentConfig.rutaEntregables;
+  return 'todas';
+}
+
+function actualizarTabsAlmacenamiento(activo) {
+  document.querySelectorAll('.storage-tab').forEach(tab => {
+    if (tab.dataset.storage === activo) {
+      tab.classList.add('active');
+    } else {
+      tab.classList.remove('active');
+    }
+  });
+}
+
+function actualizarLabelsUI() {
+  const ubi = currentConfig.ubicacionActiva || 'entregables';
+  if (allFoldersLabel) {
+    if (ubi === 'todas') allFoldersLabel.textContent = 'Todas las ubicaciones';
+    else if (ubi === 'entregables') allFoldersLabel.textContent = 'Todas las entregas';
+    else if (ubi === 'irec') allFoldersLabel.textContent = 'Todo irec';
+    else if (ubi === 'ssdirec') allFoldersLabel.textContent = 'Todo ssdirec';
+  }
+  if (activeDelName) {
+    if (ubi === 'todas') activeDelName.textContent = 'Todas las ubicaciones';
+    else if (ubi === 'entregables') activeDelName.textContent = 'Todas las entregas y carpetas';
+    else if (ubi === 'irec') activeDelName.textContent = 'Todo irec';
+    else if (ubi === 'ssdirec') activeDelName.textContent = 'Todo ssdirec';
+  }
+}
+
+function actualizarRutaSidebar() {
+  if (!sidebarCurrentPath) return;
+  const ubi = currentConfig.ubicacionActiva || 'entregables';
+  let ruta = '';
+  if (ubi === 'irec') ruta = currentConfig.rutaIrec;
+  else if (ubi === 'ssdirec') ruta = currentConfig.rutaSsdirec;
+  else if (ubi === 'entregables') ruta = currentConfig.rutaEntregables;
+  else ruta = 'Todas las ubicaciones (irec, ssdirec, entregables)';
+
+  sidebarCurrentPath.textContent = ruta;
+  sidebarCurrentPath.title = ruta;
+}
+
+async function cambiarAlmacenamiento(nuevaUbicacion) {
+  if (currentConfig.ubicacionActiva === nuevaUbicacion) return;
+
+  currentConfig.ubicacionActiva = nuevaUbicacion;
+  currentCarpeta = '';
+  currentRutaCompleta = '';
+
+  actualizarTabsAlmacenamiento(nuevaUbicacion);
+  actualizarRutaSidebar();
+  actualizarLabelsUI();
+
+  const labels = {
+    'irec': 'irec',
+    'ssdirec': 'ssdirec',
+    'entregables': 'Entregables Finanzas',
+    'todas': 'Todas las ubicaciones'
+  };
+  showToast(`Ubicación: ${labels[nuevaUbicacion] || nuevaUbicacion}`, 'info');
+
+  await cargarCarpetas(false);
+
+  const terminos = obtenerTerminosBusqueda();
+  if (terminos.length > 0) {
+    ejecutarBusqueda();
+  } else {
+    cargarListadoInicial();
+  }
+}
+
+async function inicializarApp() {
   setupEventListeners();
   initTableColumnResizers();
   await cargarConfiguracionInicial();
   await verificarEstadoRed();
-  await cargarCarpetasAlmacenamiento(currentConfig.servidorActivo);
+  await cargarCarpetas();
   await cargarListadoInicial();
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', inicializarApp);
+} else {
+  inicializarApp();
+}
 
 async function cargarConfiguracionInicial() {
   try {
@@ -284,12 +363,13 @@ async function cargarConfiguracionInicial() {
       currentConfig = { ...currentConfig, ...cfg };
     }
 
-    actualizarTabsAlmacenamiento(currentConfig.servidorActivo || 'irec');
+    actualizarTabsAlmacenamiento(currentConfig.ubicacionActiva || 'entregables');
     actualizarRutaSidebar();
-    actualizarBreadcrumb();
+    actualizarLabelsUI();
 
     if (cfgRutaIrec) cfgRutaIrec.value = currentConfig.rutaIrec || '\\\\172.40.5.84\\irec';
     if (cfgRutaSsdirec) cfgRutaSsdirec.value = currentConfig.rutaSsdirec || '\\\\172.40.5.84\\ssdirec';
+    if (cfgRutaEntregables) cfgRutaEntregables.value = currentConfig.rutaEntregables || '\\\\172.40.5.84\\ssdirec\\ENTREGABLES PROCESADOS FINANZAS';
     if (cfgTimeout) cfgTimeout.value = currentConfig.tiempoLimiteMs || 45000;
     if (selectMaxResults) selectMaxResults.value = currentConfig.limiteResultados || 200;
   } catch (err) {
@@ -297,57 +377,28 @@ async function cargarConfiguracionInicial() {
   }
 }
 
-function actualizarRutaSidebar() {
-  const alm = currentConfig.servidorActivo;
-  if (alm === 'ssdirec') {
-    sidebarCurrentPath.textContent = currentConfig.rutaSsdirec;
-    sidebarCurrentPath.title = currentConfig.rutaSsdirec;
-  } else if (alm === 'ambos') {
-    sidebarCurrentPath.textContent = 'irec + ssdirec';
-    sidebarCurrentPath.title = `${currentConfig.rutaIrec} + ${currentConfig.rutaSsdirec}`;
-  } else {
-    sidebarCurrentPath.textContent = currentConfig.rutaIrec;
-    sidebarCurrentPath.title = currentConfig.rutaIrec;
-  }
-}
-
-function actualizarBreadcrumb() {
-  const alm = currentConfig.servidorActivo || 'irec';
-  if (bcServerBadge) {
-    bcServerBadge.textContent = alm;
-    bcServerBadge.className = `bc-server-badge ${alm}`;
-  }
-  if (bcFolderName) {
-    bcFolderName.textContent = currentCarpeta ? currentCarpeta : 'Todas las carpetas';
-    bcFolderName.title = currentCarpeta ? currentCarpeta : 'Todas las carpetas';
-  }
-}
-
 async function verificarEstadoRed() {
   connectionStatus.className = 'status-pill checking';
-  statusText.textContent = 'Verificando red...';
+  statusText.textContent = 'Verificando servidores...';
 
   try {
     const res = await window.electronAPI.verificarServidores({
       rutaIrec: currentConfig.rutaIrec,
-      rutaSsdirec: currentConfig.rutaSsdirec
+      rutaSsdirec: currentConfig.rutaSsdirec,
+      rutaEntregables: currentConfig.rutaEntregables
     });
 
-    if (res.irec && res.ssdirec) {
+    if (res && res.todoConectado) {
       connectionStatus.className = 'status-pill online';
-      statusText.textContent = 'irec & ssdirec Conectados';
+      statusText.textContent = 'Servidores conectados';
       return true;
-    } else if (res.irec) {
+    } else if (res && res.conectado) {
       connectionStatus.className = 'status-pill online';
-      statusText.textContent = 'Servidor irec Conectado';
-      return true;
-    } else if (res.ssdirec) {
-      connectionStatus.className = 'status-pill online';
-      statusText.textContent = 'Servidor ssdirec Conectado';
+      statusText.textContent = res.mensaje || 'Servidores accesibles';
       return true;
     } else {
       connectionStatus.className = 'status-pill offline';
-      statusText.textContent = 'Servidores no accesibles';
+      statusText.textContent = 'Sin conexión a red';
       showToast('No se puede acceder a las rutas de red configuradas', 'error');
       return false;
     }
@@ -358,71 +409,31 @@ async function verificarEstadoRed() {
   }
 }
 
-function actualizarTabsAlmacenamiento(almacenamiento) {
-  storageTabs.forEach(tab => {
-    if (tab.dataset.storage === almacenamiento) {
-      tab.classList.add('active');
-    } else {
-      tab.classList.remove('active');
-    }
-  });
-
-  if (foldersSectionTitle) {
-    foldersSectionTitle.textContent = almacenamiento === 'ssdirec' ? 'EXPLORADOR SSDIREC' : almacenamiento === 'ambos' ? 'EXPLORADOR DE RED' : 'EXPLORADOR IREC';
-  }
-
-  if (allFoldersLabel) {
-    allFoldersLabel.textContent = almacenamiento === 'ssdirec' ? 'Todo ssdirec' : almacenamiento === 'ambos' ? 'Todos los servidores' : 'Todo irec';
-  }
-
-  actualizarBreadcrumb();
-}
-
-async function cambiarAlmacenamiento(nuevoAlmacenamiento) {
-  if (currentConfig.servidorActivo === nuevoAlmacenamiento) return;
-
-  currentConfig.servidorActivo = nuevoAlmacenamiento;
-  currentCarpeta = '';
-  currentRutaCompleta = '';
-
-  actualizarTabsAlmacenamiento(nuevoAlmacenamiento);
-  actualizarRutaSidebar();
-  actualizarBreadcrumb();
-
-  showToast(`Cambiado a [${nuevoAlmacenamiento.toUpperCase()}]`, 'info');
-
-  await cargarCarpetasAlmacenamiento(nuevoAlmacenamiento);
-
-  const terminos = obtenerTerminosBusqueda();
-  if (terminos.length > 0) {
-    ejecutarBusqueda();
-  } else {
-    cargarListadoInicial();
-  }
-}
 // ==========================================================================
 // EXPLORADOR DE ARCHIVOS EN SIDEBAR (TREE VIEW CON SCROLL Y CACHÉ EN MEMORIA)
 // ==========================================================================
-async function cargarCarpetasAlmacenamiento(almacenamiento, forzarRed = false) {
+async function cargarCarpetas(forzarRed = false) {
+  const ubi = currentConfig.ubicacionActiva || 'entregables';
   try {
-    // Si ya está guardado en memoria RAM y no se fuerza recarga
-    if (!forzarRed && cacheMemoria.carpetasRaiz.has(almacenamiento)) {
-      carpetasList = cacheMemoria.carpetasRaiz.get(almacenamiento);
+    if (!forzarRed && cacheMemoria.carpetasRaiz.has(ubi)) {
+      carpetasList = cacheMemoria.carpetasRaiz.get(ubi);
       renderizarArbolCarpetas(carpetasList);
       return;
     }
 
-    explorerTree.innerHTML = '<div style="padding: 12px; font-size: 12px; color: #94a3b8;">Cargando árbol de carpetas...</div>';
+    explorerTree.innerHTML = '<div style="padding: 12px; font-size: 12px; color: #94a3b8;">Cargando carpetas...</div>';
 
     const res = await window.electronAPI.obtenerCarpetas({
-      almacenamiento,
+      ubicacion: ubi,
       rutaIrec: currentConfig.rutaIrec,
-      rutaSsdirec: currentConfig.rutaSsdirec
+      rutaSsdirec: currentConfig.rutaSsdirec,
+      rutaEntregables: currentConfig.rutaEntregables,
+      forzarRed
     });
 
     if (res && res.carpetas) {
       carpetasList = res.carpetas;
-      cacheMemoria.carpetasRaiz.set(almacenamiento, carpetasList);
+      cacheMemoria.carpetasRaiz.set(ubi, carpetasList);
       renderizarArbolCarpetas(carpetasList);
     } else {
       explorerTree.innerHTML = '<div style="padding: 12px; font-size: 12px; color: #e53e3e;">No se pudieron leer las carpetas.</div>';
@@ -481,7 +492,7 @@ function renderizarArbolCarpetas(carpetas) {
         childrenContainer.classList.remove('hidden');
 
         if (!childrenContainer.dataset.loaded) {
-          const rutaBase = currentConfig.servidorActivo === 'ssdirec' ? currentConfig.rutaSsdirec : currentConfig.rutaIrec;
+          const rutaBase = currentConfig.rutaBase;
           const cacheKey = `${rutaBase}:::${subruta || rutaCompleta}`;
 
           if (cacheMemoria.subcarpetas.has(cacheKey)) {
@@ -642,13 +653,9 @@ function seleccionarCarpeta(subruta, rutaCompleta, nombre, elementoClick = null)
     }
   }
 
-  const alm = currentConfig.servidorActivo;
-  const labelDefault = alm === 'ssdirec' ? 'Todo ssdirec' : alm === 'ambos' ? 'Ambos servidores' : 'Todo irec';
   if (activeDelName) {
-    activeDelName.textContent = nombre ? nombre : labelDefault;
+    activeDelName.textContent = nombre ? nombre : 'Todas las entregas y carpetas';
   }
-
-  actualizarBreadcrumb();
 
   const terminos = obtenerTerminosBusqueda();
   if (terminos.length > 0) {
@@ -732,9 +739,9 @@ function limpiarBusqueda() {
 // CARGA INICIAL DE ARCHIVOS (CON MEMORIA RAM CACHÉ)
 // ==========================================================================
 async function cargarListadoInicial(forzarRed = false) {
-  const alm = currentConfig.servidorActivo;
+  const ubi = currentConfig.ubicacionActiva || 'entregables';
   const limite = parseInt(selectMaxResults.value, 10) || 200;
-  const cacheKey = `${alm}:::${currentCarpeta}:::${currentRutaCompleta}:::${limite}`;
+  const cacheKey = `listado:::${ubi}:::${currentCarpeta}:::${currentRutaCompleta}:::${limite}`;
 
   // Si ya se consultó antes, responder de inmediato en 0ms desde memoria RAM
   if (!forzarRed && cacheMemoria.listados.has(cacheKey)) {
@@ -751,15 +758,24 @@ async function cargarListadoInicial(forzarRed = false) {
 
   const titleEl = document.getElementById('loading-title');
   const detailsEl = document.getElementById('loading-details');
-  const carpetaText = currentCarpeta ? `en ${currentCarpeta}` : `en ${alm.toUpperCase()}`;
+  const ubiNames = {
+    'irec': 'irec',
+    'ssdirec': 'ssdirec',
+    'entregables': 'ENTREGABLES FINANZAS',
+    'todas': 'todas las ubicaciones'
+  };
+  const ubiText = `en ${ubiNames[ubi] || ubi}`;
+  const carpetaText = currentCarpeta ? `en ${currentCarpeta}` : ubiText;
   titleEl.textContent = `Listando archivos ${carpetaText}...`;
   detailsEl.textContent = 'Obteniendo expedientes PDF...';
 
   try {
     const res = await window.electronAPI.listarArchivosIniciales({
-      almacenamiento: alm,
+      ubicacion: ubi,
       rutaIrec: currentConfig.rutaIrec,
       rutaSsdirec: currentConfig.rutaSsdirec,
+      rutaEntregables: currentConfig.rutaEntregables,
+      rutaBase: getRutaBaseActual(),
       carpeta: currentCarpeta,
       rutaCompleta: currentRutaCompleta,
       limite: limite
@@ -788,11 +804,11 @@ async function ejecutarBusqueda(esSilencioso = false, forzarRed = false) {
 
   registrarBusquedaReciente(terminos);
 
+  const ubi = currentConfig.ubicacionActiva || 'entregables';
   const limite = parseInt(selectMaxResults.value, 10) || 200;
   const buscarEnRuta = chkSearchInPath ? chkSearchInPath.checked : true;
-  const alm = currentConfig.servidorActivo;
   const terminosClave = [...terminos].sort().join('|');
-  const cacheKey = `${alm}:::${currentCarpeta}:::${currentRutaCompleta}:::${terminosClave}:::${limite}:::${buscarEnRuta}`;
+  const cacheKey = `busqueda:::${ubi}:::${currentCarpeta}:::${currentRutaCompleta}:::${terminosClave}:::${limite}:::${buscarEnRuta}`;
 
   // Si esta búsqueda ya se hizo en esta carpeta, responder instantáneamente
   if (!forzarRed && cacheMemoria.busquedas.has(cacheKey)) {
@@ -806,14 +822,16 @@ async function ejecutarBusqueda(esSilencioso = false, forzarRed = false) {
   }
 
   const options = {
-    almacenamiento: alm,
+    ubicacion: ubi,
     rutaIrec: currentConfig.rutaIrec,
     rutaSsdirec: currentConfig.rutaSsdirec,
+    rutaEntregables: currentConfig.rutaEntregables,
+    rutaBase: getRutaBaseActual(),
     palabras: terminos,
     carpeta: currentCarpeta,
     rutaCompleta: currentRutaCompleta,
     limiteResultados: limite,
-    profundidadMaxima: currentConfig.profundidadMaxima || 6,
+    profundidadMaxima: currentConfig.profundidadMaxima || 8,
     tiempoLimiteMs: currentConfig.tiempoLimiteMs || 45000,
     buscarEnRuta: buscarEnRuta,
     extensiones: ['pdf']
@@ -840,8 +858,15 @@ function mostrarEstadoCargando() {
 
   const titleEl = document.getElementById('loading-title');
   const detailsEl = document.getElementById('loading-details');
-  const alm = currentConfig.servidorActivo;
-  const carpetaText = currentCarpeta ? `en ${currentCarpeta}` : `en todo [${alm.toUpperCase()}]`;
+  const ubi = currentConfig.ubicacionActiva || 'entregables';
+  const ubiNames = {
+    'irec': 'irec',
+    'ssdirec': 'ssdirec',
+    'entregables': 'ENTREGABLES FINANZAS',
+    'todas': 'todas las ubicaciones'
+  };
+  const ubiText = `en ${ubiNames[ubi] || ubi}`;
+  const carpetaText = currentCarpeta ? `en ${currentCarpeta}` : ubiText;
   titleEl.textContent = `Buscando expedientes ${carpetaText}...`;
   detailsEl.textContent = 'Comparando términos en milisegundos...';
 }
@@ -856,11 +881,10 @@ function renderResultados(res) {
     stateNoResults.style.display = 'flex';
 
     const etiquetasStr = (res.palabras || []).join(', ');
-    const alm = currentConfig.servidorActivo;
     if (currentCarpeta) {
-      noResultsDesc.textContent = `No se encontraron coincidencias para [${etiquetasStr}] en "${currentCarpeta}" (${alm}).`;
+      noResultsDesc.textContent = `No se encontraron coincidencias para [${etiquetasStr}] en "${currentCarpeta}".`;
     } else {
-      noResultsDesc.textContent = `No se encontraron archivos en ${alm} que coincidan con las etiquetas indicadas.`;
+      noResultsDesc.textContent = 'No se encontraron archivos que coincidan con las etiquetas indicadas.';
     }
     ultimosResultados = [];
     return;
@@ -906,7 +930,6 @@ function renderResultados(res) {
     tr.title = 'Haz doble clic para abrir el archivo directamente';
 
     const nombreResaltado = resaltarPalabras(item.nombre, palabrasABuscar);
-    const serverTag = item.almacenamiento || (item.rutaCompleta.includes('ssdirec') ? 'ssdirec' : 'irec');
 
     tr.innerHTML = `
       <td class="col-icon">
@@ -918,6 +941,7 @@ function renderResultados(res) {
         </div>
       </td>
       <td class="col-del">
+        ${item.almacenamiento ? `<span class="badge-location ${escapeHtml(item.almacenamiento)}">${escapeHtml(item.almacenamiento)}</span>` : ''}
         <span class="del-tag">${escapeHtml(item.delegacion || 'General')}</span>
       </td>
       <td class="col-path" title="${escapeHtml(item.rutaCompleta)}">
@@ -1132,7 +1156,7 @@ function initTableColumnResizers() {
 // EVENT LISTENERS
 // ==========================================================================
 function setupEventListeners() {
-  storageTabs.forEach(tab => {
+  document.querySelectorAll('.storage-tab').forEach(tab => {
     tab.addEventListener('click', () => {
       cambiarAlmacenamiento(tab.dataset.storage);
     });
@@ -1146,11 +1170,12 @@ function setupEventListeners() {
 
   if (btnRefreshTree) {
     btnRefreshTree.addEventListener('click', () => {
-      cacheMemoria.carpetasRaiz.clear();
+      const ubi = currentConfig.ubicacionActiva || 'entregables';
+      cacheMemoria.carpetasRaiz.delete(ubi);
       cacheMemoria.subcarpetas.clear();
       cacheMemoria.listados.clear();
       cacheMemoria.busquedas.clear();
-      cargarCarpetasAlmacenamiento(currentConfig.servidorActivo, true);
+      cargarCarpetas(true);
       const terminos = obtenerTerminosBusqueda();
       if (terminos.length > 0) {
         ejecutarBusqueda(false, true);
@@ -1220,24 +1245,11 @@ function setupEventListeners() {
       }
       const val = searchInput.value.trim();
       if (val) {
-        agregarChip(val);
+        const partes = val.split(/\s+/);
+        partes.forEach(p => agregarChip(p));
         searchInput.value = '';
       }
       ocultarSugerencias();
-      clearTimeout(searchDebounceTimer);
-      ejecutarBusqueda();
-      return;
-    }
-
-    if (e.key === ' ') {
-      e.preventDefault();
-      const val = searchInput.value.trim();
-      if (val) {
-        agregarChip(val);
-        searchInput.value = '';
-      }
-      ocultarSugerencias();
-      clearTimeout(searchDebounceTimer);
       ejecutarBusqueda();
       return;
     }
@@ -1246,44 +1258,23 @@ function setupEventListeners() {
       e.preventDefault();
       searchChips.pop();
       renderChips();
-      ejecutarBusqueda();
-    }
-  });
-
-  searchInput.addEventListener('paste', (e) => {
-    const pasteText = (e.clipboardData || window.clipboardData).getData('text');
-    if (pasteText && /\s/.test(pasteText.trim())) {
-      e.preventDefault();
-      const palabras = pasteText.trim().split(/\s+/);
-      palabras.forEach(p => agregarChip(p));
-      searchInput.value = '';
       actualizarBotonLimpiar();
-      ocultarSugerencias();
-      ejecutarBusqueda();
     }
   });
 
   searchInput.addEventListener('input', () => {
     actualizarBotonLimpiar();
     mostrarSugerencias();
-    clearTimeout(searchDebounceTimer);
-    const val = searchInput.value.trim();
-
-    if (val.length >= 2 || searchChips.length > 0) {
-      searchDebounceTimer = setTimeout(() => {
-        ejecutarBusqueda(true);
-      }, 250);
-    } else if (val.length === 0 && searchChips.length === 0) {
-      cargarListadoInicial();
-    }
   });
 
   btnExecSearch.addEventListener('click', () => {
     const texto = searchInput.value.trim();
     if (texto) {
-      agregarChip(texto);
+      const partes = texto.split(/\s+/);
+      partes.forEach(p => agregarChip(p));
       searchInput.value = '';
     }
+    ocultarSugerencias();
     ejecutarBusqueda();
   });
 
@@ -1344,14 +1335,21 @@ function setupEventListeners() {
   if (btnBrowseIrec) {
     btnBrowseIrec.addEventListener('click', async () => {
       const seleccion = await window.electronAPI.seleccionarCarpeta();
-      if (seleccion) cfgRutaIrec.value = seleccion;
+      if (seleccion && cfgRutaIrec) cfgRutaIrec.value = seleccion;
     });
   }
 
   if (btnBrowseSsdirec) {
     btnBrowseSsdirec.addEventListener('click', async () => {
       const seleccion = await window.electronAPI.seleccionarCarpeta();
-      if (seleccion) cfgRutaSsdirec.value = seleccion;
+      if (seleccion && cfgRutaSsdirec) cfgRutaSsdirec.value = seleccion;
+    });
+  }
+
+  if (btnBrowseEntregables) {
+    btnBrowseEntregables.addEventListener('click', async () => {
+      const seleccion = await window.electronAPI.seleccionarCarpeta();
+      if (seleccion && cfgRutaEntregables) cfgRutaEntregables.value = seleccion;
     });
   }
 
@@ -1363,28 +1361,35 @@ function setupEventListeners() {
   }
 
   btnSaveSettings.addEventListener('click', async () => {
-    const nuevaRutaIrec = cfgRutaIrec.value.trim();
-    const nuevaRutaSsdirec = cfgRutaSsdirec.value.trim();
+    const nuevaRutaIrec = cfgRutaIrec ? cfgRutaIrec.value.trim() : currentConfig.rutaIrec;
+    const nuevaRutaSsdirec = cfgRutaSsdirec ? cfgRutaSsdirec.value.trim() : currentConfig.rutaSsdirec;
+    const nuevaRutaEntregables = cfgRutaEntregables ? cfgRutaEntregables.value.trim() : currentConfig.rutaEntregables;
     const nuevoTimeout = parseInt(cfgTimeout.value, 10) || 45000;
 
     currentConfig.rutaIrec = nuevaRutaIrec;
     currentConfig.rutaSsdirec = nuevaRutaSsdirec;
+    currentConfig.rutaEntregables = nuevaRutaEntregables;
     currentConfig.tiempoLimiteMs = nuevoTimeout;
 
     await window.electronAPI.guardarConfig({
-      servidorActivo: currentConfig.servidorActivo,
+      ubicacionActiva: currentConfig.ubicacionActiva,
       rutaIrec: nuevaRutaIrec,
       rutaSsdirec: nuevaRutaSsdirec,
+      rutaEntregables: nuevaRutaEntregables,
       tiempoLimiteMs: nuevoTimeout
     });
 
     modalSettings.style.display = 'none';
-    showToast('Ajustes de red guardados correctamente', 'success');
+    showToast('Ajustes de servidores guardados', 'success');
 
     actualizarRutaSidebar();
     await verificarEstadoRed();
-    await cargarCarpetasAlmacenamiento(currentConfig.servidorActivo);
-    cargarListadoInicial();
+    cacheMemoria.carpetasRaiz.clear();
+    cacheMemoria.subcarpetas.clear();
+    cacheMemoria.listados.clear();
+    cacheMemoria.busquedas.clear();
+    await cargarCarpetas(true);
+    cargarListadoInicial(true);
   });
 }
 

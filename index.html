@@ -16,7 +16,7 @@
       <div class="header-left">
         <div id="connection-status" class="status-pill checking">
           <span class="status-dot"></span>
-          <span id="status-text">Verificando servidores...</span>
+          <span id="status-text">Verificando conexión...</span>
         </div>
       </div>
 
@@ -37,30 +37,37 @@
     <div class="app-body">
       <!-- Sidebar Izquierdo: Explorador de Archivos -->
       <aside class="app-sidebar">
-        <!-- Selector de Servidor / Almacenamiento -->
+        <!-- Selector de Ubicación de Búsqueda (4 opciones) -->
         <div class="storage-selector-zone">
-          <span class="section-title">ALMACENAMIENTO DE RED</span>
+          <span class="section-title">UBICACIÓN DE BÚSQUEDA</span>
           <div class="storage-tabs">
-            <button type="button" class="storage-tab active" data-storage="irec"
-              title="Buscar en toda la carpeta irec (\\172.40.5.84\irec)">
+            <button type="button" class="storage-tab" data-storage="irec" title="Buscar en irec (\\172.40.5.84\irec)">
               <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none">
                 <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
               </svg>
               <span>irec</span>
             </button>
-            <button type="button" class="storage-tab" data-storage="ssdirec"
-              title="Buscar en servidor rápido ssdirec (\\172.40.5.84\ssdirec)">
+            <button type="button" class="storage-tab" data-storage="ssdirec" title="Buscar en ssdirec (\\172.40.5.84\ssdirec)">
               <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none">
                 <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
               </svg>
               <span>ssdirec</span>
             </button>
-            <button type="button" class="storage-tab" data-storage="ambos" title="Buscar en ambos simultáneamente">
+            <button type="button" class="storage-tab active" data-storage="entregables" title="Buscar en Entregables Finanzas">
+              <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                <line x1="12" y1="22.08" x2="12" y2="12"></line>
+              </svg>
+              <span>Entregables</span>
+            </button>
+            <button type="button" class="storage-tab" data-storage="todas" title="Buscar en todas las ubicaciones">
               <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none">
                 <circle cx="12" cy="12" r="10"></circle>
                 <line x1="2" y1="12" x2="22" y2="12"></line>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
               </svg>
-              <span>Ambos</span>
+              <span>Todas</span>
             </button>
           </div>
         </div>
@@ -68,7 +75,7 @@
         <!-- Explorador de Archivos / Carpetas (Tree View con Scroll) -->
         <div class="sidebar-section explorer-section">
           <div class="sidebar-section-header">
-            <span class="section-title" id="folders-section-title">EXPLORADOR DE CARPETAS</span>
+            <span class="section-title" id="folders-section-title">EXPLORADOR DE ENTREGAS</span>
             <div class="explorer-actions">
               <button id="btn-refresh-tree" class="btn-refresh-pill" title="Actualizar carpetas desde la red">
                 <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.2" fill="none">
@@ -85,16 +92,16 @@
               <circle cx="11" cy="11" r="8"></circle>
               <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
             </svg>
-            <input type="text" id="filter-delegacion-input" placeholder="Filtrar carpetas...">
+            <input type="text" id="filter-delegacion-input" placeholder="Filtrar entregas y carpetas...">
           </div>
 
           <!-- Árbol de carpetas con SCROLL vertical fluido -->
           <div class="explorer-tree-wrapper" id="explorer-tree-wrapper">
             <div class="tree-item tree-root-item active" id="tree-root-all" data-path="" data-subruta=""
-              data-nombre="Todo el almacenamiento">
+              data-nombre="Todas las entregas y carpetas">
               <span class="tree-toggle-spacer"></span>
               <span class="tree-folder-emoji">&#128193;</span>
-              <span class="tree-label" id="all-folders-label">Todo el almacenamiento</span>
+              <span class="tree-label" id="all-folders-label">Todas las entregas y carpetas</span>
             </div>
             <div id="explorer-tree" class="explorer-tree-nodes">
               <!-- Nodos generados dinámicamente con carpetas e iconos -->
@@ -106,8 +113,8 @@
         <div class="sidebar-footer">
           <div class="network-info-card">
             <div class="net-title">Ruta Activa</div>
-            <div id="sidebar-current-path" class="net-path" title="\\172.40.5.84\irec">
-              \\172.40.5.84\irec
+            <div id="sidebar-current-path" class="net-path" title="\\172.40.5.84\ssdirec\ENTREGABLES PROCESADOS FINANZAS">
+              \\172.40.5.84\ssdirec\ENTREGABLES PROCESADOS FINANZAS
             </div>
             <button id="btn-quick-verify" class="btn-net-verify">Comprobar Acceso</button>
           </div>
@@ -127,11 +134,11 @@
                 </svg>
               </div>
 
-              <!-- Lista dinámica de chips/badges que se generan con [Espacio] o [Enter] -->
+              <!-- Lista dinámica de chips/badges que se generan con [Enter] o al Buscar -->
               <div class="chips-list" id="chips-list"></div>
 
               <input type="text" id="search-input" class="search-input-field"
-                placeholder="Escribe palabras clave y presiona [Espacio] o [Enter] (ej. 2004 1788)..."
+                placeholder="Escribe palabras clave y presiona Enter o Buscar (ej. 2004 1788)..."
                 autocomplete="off" spellcheck="false">
 
               <button id="btn-clear-search" class="btn-clear-input" title="Borrar búsqueda" style="display: none;">
@@ -182,7 +189,7 @@
                 <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none">
                   <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
                 </svg>
-                <span id="active-del-name">Todo irec</span>
+                <span id="active-del-name">Todas las entregas y carpetas</span>
               </span>
             </div>
           </div>
@@ -220,17 +227,17 @@
                 <path d="M8 11h6"></path>
               </svg>
             </div>
-            <h2>Buscador de Expedientes IREC</h2>
-            <p>Escribe una o varias palabras para localizar archivos PDF en los servidores <strong>irec</strong> y
-              <strong>ssdirec</strong>, o selecciona una carpeta en el explorador lateral.
+            <h2>Buscador de Expedientes - ENTREGABLES PROCESADOS FINANZAS</h2>
+            <p>Escribe palabras clave para localizar archivos PDF en <strong>ENTREGABLES PROCESADOS FINANZAS</strong>, o selecciona una entrega en el explorador lateral.
             </p>
             <div class="examples-card">
               <span class="examples-title">Ejemplos de búsqueda:</span>
               <div class="example-chips">
-                <button class="ex-chip" data-example="2004 1788">2004 1788</button>
-                <button class="ex-chip" data-example="Tuxtla 2004">Tuxtla 2004</button>
-                <button class="ex-chip" data-example="LoteLibrosss 2004 1788">LoteLibrosss 2004 1788</button>
-                <button class="ex-chip" data-example="ENTREGABLES PROCESADOS FINANZAS">Finanzas</button>
+                <button class="ex-chip" data-example="ENTREGA 1">ENTREGA 1</button>
+                <button class="ex-chip" data-example="REGISTROS">REGISTROS</button>
+                <button class="ex-chip" data-example="SELLOS">SELLOS</button>
+                <button class="ex-chip" data-example="08_2">08_2</button>
+                <button class="ex-chip" data-example="2011 94100">2011 94100</button>
               </div>
             </div>
           </div>
@@ -303,26 +310,35 @@
     <div id="modal-settings" class="modal-overlay" style="display: none;">
       <div class="modal-card">
         <div class="modal-header">
-          <h3>Configuración de Servidores IREC</h3>
+          <h3>Configuración de Ubicaciones y Servidores</h3>
           <button id="btn-close-settings" class="btn-modal-close">&times;</button>
         </div>
         <div class="modal-body">
           <div class="settings-form-group">
-            <label for="cfg-ruta-irec">Ruta Servidor Principal (irec):</label>
+            <label for="cfg-ruta-irec">1. Servidor Principal (irec):</label>
             <div class="input-with-browse">
               <input type="text" id="cfg-ruta-irec" placeholder="\\172.40.5.84\irec">
               <button id="btn-browse-irec" class="btn-secondary" title="Examinar carpeta">Examinar</button>
             </div>
-            <span class="input-help">Carpeta compartida principal con Respaldo_Original, Libros, Notarías, etc.</span>
+            <span class="input-help">Carpeta compartida principal con Respaldo_Original, Libros y Notarías.</span>
           </div>
 
           <div class="settings-form-group">
-            <label for="cfg-ruta-ssdirec">Ruta Servidor Rápido (ssdirec):</label>
+            <label for="cfg-ruta-ssdirec">2. Servidor Rápido (ssdirec):</label>
             <div class="input-with-browse">
               <input type="text" id="cfg-ruta-ssdirec" placeholder="\\172.40.5.84\ssdirec">
               <button id="btn-browse-ssdirec" class="btn-secondary" title="Examinar carpeta">Examinar</button>
             </div>
-            <span class="input-help">Unidad de almacenamiento rápido con Entregables, Finanzas y PDFs raíz.</span>
+            <span class="input-help">Unidad de almacenamiento rápida ssdirec.</span>
+          </div>
+
+          <div class="settings-form-group">
+            <label for="cfg-ruta-entregables">3. Entregables Finanzas:</label>
+            <div class="input-with-browse">
+              <input type="text" id="cfg-ruta-entregables" placeholder="\\172.40.5.84\ssdirec\ENTREGABLES PROCESADOS FINANZAS">
+              <button id="btn-browse-entregables" class="btn-secondary" title="Examinar carpeta">Examinar</button>
+            </div>
+            <span class="input-help">Subcarpeta con las entregas de finanzas (ENTREGA 1, ENTREGA 2, etc.).</span>
           </div>
 
           <div class="settings-form-group">
