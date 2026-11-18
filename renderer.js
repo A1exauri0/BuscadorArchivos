@@ -39,6 +39,8 @@ function obtenerClaseTamanoTexto(texto) {
 }
 
 // DOM Elements
+const btnToggleSidebar = document.getElementById('btn-toggle-sidebar');
+const appSidebar = document.querySelector('.app-sidebar');
 const foldersSectionTitle = document.getElementById('folders-section-title');
 const allFoldersLabel = document.getElementById('all-folders-label');
 
@@ -254,23 +256,54 @@ const btnOpenSettings = document.getElementById('btn-open-settings');
 
 const modalSettings = document.getElementById('modal-settings');
 const btnCloseSettings = document.getElementById('btn-close-settings');
-const cfgRutaIrec = document.getElementById('cfg-ruta-irec');
-const cfgRutaSsdirec = document.getElementById('cfg-ruta-ssdirec');
-const cfgRutaEntregables = document.getElementById('cfg-ruta-entregables');
-const btnBrowseIrec = document.getElementById('btn-browse-irec');
-const btnBrowseSsdirec = document.getElementById('btn-browse-ssdirec');
-const btnBrowseEntregables = document.getElementById('btn-browse-entregables');
+const storageTabsContainer = document.getElementById('storage-tabs-container');
+const settingsRutasDinamicas = document.getElementById('settings-rutas-dinamicas');
+const btnAddNewRoute = document.getElementById('btn-add-new-route');
 const cfgTimeout = document.getElementById('cfg-timeout');
 const btnSaveSettings = document.getElementById('btn-save-settings');
 
 const toastContainer = document.getElementById('toast-container');
 
+const ICONOS_SVG = {
+  box: `<svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>`,
+  camera: `<svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>`,
+  folder: `<svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>`,
+  server: `<svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>`,
+  todas: `<svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>`
+};
+
+function renderizarTabsUbicacion() {
+  if (!storageTabsContainer) return;
+  storageTabsContainer.innerHTML = '';
+
+  const activa = currentConfig.ubicacionActiva || 'entregables';
+
+  listaRutas.forEach(r => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'storage-tab' + (r.id === activa ? ' active' : '');
+    btn.dataset.storage = r.id;
+    btn.title = `Buscar en ${r.titulo || r.nombre} (${r.ruta})`;
+    btn.innerHTML = `${ICONOS_SVG[r.icono] || ICONOS_SVG.folder}<span>${escapeHtml(r.nombre)}</span>`;
+    btn.addEventListener('click', () => cambiarAlmacenamiento(r.id));
+    storageTabsContainer.appendChild(btn);
+  });
+
+  const btnTodas = document.createElement('button');
+  btnTodas.type = 'button';
+  btnTodas.className = 'storage-tab' + (activa === 'todas' ? ' active' : '');
+  btnTodas.dataset.storage = 'todas';
+  btnTodas.title = 'Buscar en todas las ubicaciones conectadas';
+  btnTodas.innerHTML = `${ICONOS_SVG.todas}<span>Todas las ubicaciones</span>`;
+  btnTodas.addEventListener('click', () => cambiarAlmacenamiento('todas'));
+  storageTabsContainer.appendChild(btnTodas);
+}
+
 function getRutaBaseActual() {
   const ubi = currentConfig.ubicacionActiva || 'entregables';
-  if (ubi === 'irec') return currentConfig.rutaIrec;
-  if (ubi === 'ssdirec') return currentConfig.rutaSsdirec;
-  if (ubi === 'entregables') return currentConfig.rutaEntregables;
-  return 'todas';
+  if (ubi === 'todas') return 'todas';
+  const item = listaRutas.find(r => r.id === ubi);
+  return item ? item.ruta : (listaRutas[0] ? listaRutas[0].ruta : '');
 }
 
 function actualizarTabsAlmacenamiento(activo) {
@@ -285,17 +318,16 @@ function actualizarTabsAlmacenamiento(activo) {
 
 function actualizarLabelsUI() {
   const ubi = currentConfig.ubicacionActiva || 'entregables';
+  let nombreUbi = 'Todas las ubicaciones';
+  if (ubi !== 'todas') {
+    const item = listaRutas.find(r => r.id === ubi);
+    nombreUbi = item ? item.nombre : ubi;
+  }
   if (allFoldersLabel) {
-    if (ubi === 'todas') allFoldersLabel.textContent = 'Todas las ubicaciones';
-    else if (ubi === 'entregables') allFoldersLabel.textContent = 'Todas las entregas';
-    else if (ubi === 'irec') allFoldersLabel.textContent = 'Todo irec';
-    else if (ubi === 'ssdirec') allFoldersLabel.textContent = 'Todo ssdirec';
+    allFoldersLabel.textContent = ubi === 'todas' ? 'Todas las ubicaciones' : `Todo ${nombreUbi}`;
   }
   if (activeDelName) {
-    if (ubi === 'todas') activeDelName.textContent = 'Todas las ubicaciones';
-    else if (ubi === 'entregables') activeDelName.textContent = 'Todas las entregas y carpetas';
-    else if (ubi === 'irec') activeDelName.textContent = 'Todo irec';
-    else if (ubi === 'ssdirec') activeDelName.textContent = 'Todo ssdirec';
+    activeDelName.textContent = ubi === 'todas' ? 'Todas las ubicaciones' : `Ubicación: ${nombreUbi}`;
   }
 }
 
@@ -303,10 +335,12 @@ function actualizarRutaSidebar() {
   if (!sidebarCurrentPath) return;
   const ubi = currentConfig.ubicacionActiva || 'entregables';
   let ruta = '';
-  if (ubi === 'irec') ruta = currentConfig.rutaIrec;
-  else if (ubi === 'ssdirec') ruta = currentConfig.rutaSsdirec;
-  else if (ubi === 'entregables') ruta = currentConfig.rutaEntregables;
-  else ruta = 'Todas las ubicaciones (irec, ssdirec, entregables)';
+  if (ubi === 'todas') {
+    ruta = `Todas las ubicaciones (${listaRutas.map(r => r.nombre).join(', ')})`;
+  } else {
+    const item = listaRutas.find(r => r.id === ubi);
+    ruta = item ? item.ruta : '';
+  }
 
   sidebarCurrentPath.textContent = ruta;
   sidebarCurrentPath.title = ruta;
@@ -323,13 +357,12 @@ async function cambiarAlmacenamiento(nuevaUbicacion) {
   actualizarRutaSidebar();
   actualizarLabelsUI();
 
-  const labels = {
-    'irec': 'irec',
-    'ssdirec': 'ssdirec',
-    'entregables': 'Entregables Finanzas',
-    'todas': 'Todas las ubicaciones'
-  };
-  showToast(`Ubicación: ${labels[nuevaUbicacion] || nuevaUbicacion}`, 'info');
+  let nombreToast = 'Todas las ubicaciones';
+  if (nuevaUbicacion !== 'todas') {
+    const item = listaRutas.find(r => r.id === nuevaUbicacion);
+    nombreToast = item ? item.nombre : nuevaUbicacion;
+  }
+  showToast(`Ubicación: ${nombreToast}`, 'info');
 
   await cargarCarpetas(false);
 
@@ -341,9 +374,34 @@ async function cambiarAlmacenamiento(nuevaUbicacion) {
   }
 }
 
+function toggleSidebar() {
+  if (!appSidebar) return;
+  const isCollapsed = appSidebar.classList.toggle('collapsed');
+  if (btnToggleSidebar) {
+    btnToggleSidebar.classList.toggle('active', isCollapsed);
+    btnToggleSidebar.title = isCollapsed
+      ? 'Mostrar barra lateral (Ctrl+B)'
+      : 'Ocultar barra lateral (Ctrl+B)';
+  }
+  try {
+    localStorage.setItem('sidebar_collapsed', isCollapsed ? '1' : '0');
+  } catch (e) {}
+}
+
 async function inicializarApp() {
   setupEventListeners();
   initTableColumnResizers();
+
+  try {
+    if (localStorage.getItem('sidebar_collapsed') === '1') {
+      if (appSidebar) appSidebar.classList.add('collapsed');
+      if (btnToggleSidebar) {
+        btnToggleSidebar.classList.add('active');
+        btnToggleSidebar.title = 'Mostrar barra lateral (Ctrl+B)';
+      }
+    }
+  } catch (e) {}
+
   await cargarConfiguracionInicial();
   await verificarEstadoRed();
   await cargarCarpetas();
@@ -358,18 +416,22 @@ if (document.readyState === 'loading') {
 
 async function cargarConfiguracionInicial() {
   try {
-    const cfg = await window.electronAPI.obtenerConfig();
+    const [cfg, rutas] = await Promise.all([
+      window.electronAPI.obtenerConfig(),
+      window.electronAPI.obtenerRutas()
+    ]);
+
     if (cfg) {
       currentConfig = { ...currentConfig, ...cfg };
     }
+    if (Array.isArray(rutas) && rutas.length > 0) {
+      listaRutas = rutas;
+    }
 
-    actualizarTabsAlmacenamiento(currentConfig.ubicacionActiva || 'entregables');
+    renderizarTabsUbicacion();
     actualizarRutaSidebar();
     actualizarLabelsUI();
 
-    if (cfgRutaIrec) cfgRutaIrec.value = currentConfig.rutaIrec || '\\\\172.40.5.84\\irec';
-    if (cfgRutaSsdirec) cfgRutaSsdirec.value = currentConfig.rutaSsdirec || '\\\\172.40.5.84\\ssdirec';
-    if (cfgRutaEntregables) cfgRutaEntregables.value = currentConfig.rutaEntregables || '\\\\172.40.5.84\\ssdirec\\ENTREGABLES PROCESADOS FINANZAS';
     if (cfgTimeout) cfgTimeout.value = currentConfig.tiempoLimiteMs || 45000;
     if (selectMaxResults) selectMaxResults.value = currentConfig.limiteResultados || 200;
   } catch (err) {
@@ -382,11 +444,7 @@ async function verificarEstadoRed() {
   statusText.textContent = 'Verificando servidores...';
 
   try {
-    const res = await window.electronAPI.verificarServidores({
-      rutaIrec: currentConfig.rutaIrec,
-      rutaSsdirec: currentConfig.rutaSsdirec,
-      rutaEntregables: currentConfig.rutaEntregables
-    });
+    const res = await window.electronAPI.verificarServidores(listaRutas);
 
     if (res && res.todoConectado) {
       connectionStatus.className = 'status-pill online';
@@ -425,9 +483,6 @@ async function cargarCarpetas(forzarRed = false) {
 
     const res = await window.electronAPI.obtenerCarpetas({
       ubicacion: ubi,
-      rutaIrec: currentConfig.rutaIrec,
-      rutaSsdirec: currentConfig.rutaSsdirec,
-      rutaEntregables: currentConfig.rutaEntregables,
       forzarRed
     });
 
@@ -823,9 +878,6 @@ async function ejecutarBusqueda(esSilencioso = false, forzarRed = false) {
 
   const options = {
     ubicacion: ubi,
-    rutaIrec: currentConfig.rutaIrec,
-    rutaSsdirec: currentConfig.rutaSsdirec,
-    rutaEntregables: currentConfig.rutaEntregables,
     rutaBase: getRutaBaseActual(),
     palabras: terminos,
     carpeta: currentCarpeta,
@@ -859,13 +911,12 @@ function mostrarEstadoCargando() {
   const titleEl = document.getElementById('loading-title');
   const detailsEl = document.getElementById('loading-details');
   const ubi = currentConfig.ubicacionActiva || 'entregables';
-  const ubiNames = {
-    'irec': 'irec',
-    'ssdirec': 'ssdirec',
-    'entregables': 'ENTREGABLES FINANZAS',
-    'todas': 'todas las ubicaciones'
-  };
-  const ubiText = `en ${ubiNames[ubi] || ubi}`;
+  let nombreUbi = 'todas las ubicaciones';
+  if (ubi !== 'todas') {
+    const item = listaRutas.find(r => r.id === ubi);
+    nombreUbi = item ? item.nombre : ubi;
+  }
+  const ubiText = `en ${nombreUbi}`;
   const carpetaText = currentCarpeta ? `en ${currentCarpeta}` : ubiText;
   titleEl.textContent = `Buscando expedientes ${carpetaText}...`;
   detailsEl.textContent = 'Comparando términos en milisegundos...';
@@ -1156,11 +1207,26 @@ function initTableColumnResizers() {
 // EVENT LISTENERS
 // ==========================================================================
 function setupEventListeners() {
-  document.querySelectorAll('.storage-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      cambiarAlmacenamiento(tab.dataset.storage);
-    });
+  if (btnToggleSidebar) {
+    btnToggleSidebar.addEventListener('click', toggleSidebar);
+  }
+
+  // Atajo global Ctrl+B para colapsar/expandir barra lateral
+  window.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+      e.preventDefault();
+      toggleSidebar();
+    }
   });
+
+  if (storageTabsContainer) {
+    storageTabsContainer.addEventListener('click', (e) => {
+      const tab = e.target.closest('.storage-tab');
+      if (tab && tab.dataset.storage) {
+        cambiarAlmacenamiento(tab.dataset.storage);
+      }
+    });
+  }
 
   if (treeRootAll) {
     treeRootAll.addEventListener('click', () => {
@@ -1323,6 +1389,7 @@ function setupEventListeners() {
   });
 
   btnOpenSettings.addEventListener('click', () => {
+    renderizarFormularioAjustesRutas();
     modalSettings.style.display = 'flex';
   });
   btnCloseSettings.addEventListener('click', () => {
@@ -1332,24 +1399,29 @@ function setupEventListeners() {
     if (e.target === modalSettings) modalSettings.style.display = 'none';
   });
 
-  if (btnBrowseIrec) {
-    btnBrowseIrec.addEventListener('click', async () => {
-      const seleccion = await window.electronAPI.seleccionarCarpeta();
-      if (seleccion && cfgRutaIrec) cfgRutaIrec.value = seleccion;
-    });
-  }
+  if (btnAddNewRoute) {
+    btnAddNewRoute.addEventListener('click', () => {
+      const nombre = prompt('Ingresa el nombre de la nueva ubicación (ej. Catastro, Archivo, etc.):');
+      if (!nombre || !nombre.trim()) return;
+      const cleanNombre = nombre.trim();
+      const id = cleanNombre.toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+      if (listaRutas.some(r => r.id === id)) {
+        alert(`Ya existe una ubicación con el identificador "${id}".`);
+        return;
+      }
+      const rutaDefault = prompt(`Ingresa la ruta UNC o carpeta para "${cleanNombre}":`, '\\\\172.40.5.84\\ssdirec\\');
+      if (!rutaDefault || !rutaDefault.trim()) return;
 
-  if (btnBrowseSsdirec) {
-    btnBrowseSsdirec.addEventListener('click', async () => {
-      const seleccion = await window.electronAPI.seleccionarCarpeta();
-      if (seleccion && cfgRutaSsdirec) cfgRutaSsdirec.value = seleccion;
-    });
-  }
+      listaRutas.push({
+        id,
+        nombre: cleanNombre,
+        titulo: cleanNombre,
+        descripcion: `Ubicación: ${cleanNombre}`,
+        ruta: rutaDefault.trim(),
+        icono: 'folder'
+      });
 
-  if (btnBrowseEntregables) {
-    btnBrowseEntregables.addEventListener('click', async () => {
-      const seleccion = await window.electronAPI.seleccionarCarpeta();
-      if (seleccion && cfgRutaEntregables) cfgRutaEntregables.value = seleccion;
+      renderizarFormularioAjustesRutas();
     });
   }
 
@@ -1361,28 +1433,32 @@ function setupEventListeners() {
   }
 
   btnSaveSettings.addEventListener('click', async () => {
-    const nuevaRutaIrec = cfgRutaIrec ? cfgRutaIrec.value.trim() : currentConfig.rutaIrec;
-    const nuevaRutaSsdirec = cfgRutaSsdirec ? cfgRutaSsdirec.value.trim() : currentConfig.rutaSsdirec;
-    const nuevaRutaEntregables = cfgRutaEntregables ? cfgRutaEntregables.value.trim() : currentConfig.rutaEntregables;
-    const nuevoTimeout = parseInt(cfgTimeout.value, 10) || 45000;
+    // Actualizar las rutas desde los inputs generados dinámicamente
+    listaRutas.forEach(r => {
+      const input = document.getElementById(`cfg-ruta-${r.id}`);
+      if (input && input.value.trim()) {
+        r.ruta = input.value.trim();
+      }
+    });
 
-    currentConfig.rutaIrec = nuevaRutaIrec;
-    currentConfig.rutaSsdirec = nuevaRutaSsdirec;
-    currentConfig.rutaEntregables = nuevaRutaEntregables;
+    const nuevoTimeout = parseInt(cfgTimeout.value, 10) || 45000;
     currentConfig.tiempoLimiteMs = nuevoTimeout;
 
+    // Guardar en rutas.json para persistencia y organización centralizada
+    await window.electronAPI.guardarRutas(listaRutas);
+
+    // Guardar configuración general
     await window.electronAPI.guardarConfig({
       ubicacionActiva: currentConfig.ubicacionActiva,
-      rutaIrec: nuevaRutaIrec,
-      rutaSsdirec: nuevaRutaSsdirec,
-      rutaEntregables: nuevaRutaEntregables,
       tiempoLimiteMs: nuevoTimeout
     });
 
     modalSettings.style.display = 'none';
-    showToast('Ajustes de servidores guardados', 'success');
+    showToast('Ajustes y rutas guardados en rutas.json', 'success');
 
+    renderizarTabsUbicacion();
     actualizarRutaSidebar();
+    actualizarLabelsUI();
     await verificarEstadoRed();
     cacheMemoria.carpetasRaiz.clear();
     cacheMemoria.subcarpetas.clear();
@@ -1390,6 +1466,52 @@ function setupEventListeners() {
     cacheMemoria.busquedas.clear();
     await cargarCarpetas(true);
     cargarListadoInicial(true);
+  });
+}
+
+function renderizarFormularioAjustesRutas() {
+  if (!settingsRutasDinamicas) return;
+  settingsRutasDinamicas.innerHTML = '';
+
+  listaRutas.forEach((r, idx) => {
+    const group = document.createElement('div');
+    group.className = 'settings-form-group';
+    group.dataset.id = r.id;
+
+    group.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+        <label for="cfg-ruta-${r.id}" style="margin: 0; font-weight: 600;">${idx + 1}. ${escapeHtml(r.nombre)} (${escapeHtml(r.titulo || r.id)}):</label>
+        ${listaRutas.length > 1 ? `<button type="button" class="btn-remove-route" data-id="${r.id}" style="background: none; border: none; color: #ef4444; font-size: 11px; cursor: pointer; padding: 2px 6px;">Eliminar</button>` : ''}
+      </div>
+      <div class="input-with-browse">
+        <input type="text" id="cfg-ruta-${r.id}" value="${escapeHtml(r.ruta)}" placeholder="\\\\172.40.5.84\\..." style="font-size: 12px;">
+        <button type="button" class="btn-secondary btn-browse-dynamic" data-id="${r.id}" title="Examinar carpeta">Examinar</button>
+      </div>
+      <span class="input-help">${escapeHtml(r.descripcion || '')}</span>
+    `;
+
+    settingsRutasDinamicas.appendChild(group);
+  });
+
+  settingsRutasDinamicas.querySelectorAll('.btn-browse-dynamic').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.id;
+      const seleccion = await window.electronAPI.seleccionarCarpeta();
+      if (seleccion) {
+        const input = document.getElementById(`cfg-ruta-${id}`);
+        if (input) input.value = seleccion;
+      }
+    });
+  });
+
+  settingsRutasDinamicas.querySelectorAll('.btn-remove-route').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      if (confirm(`¿Eliminar la ubicación "${id}"?`)) {
+        listaRutas = listaRutas.filter(item => item.id !== id);
+        renderizarFormularioAjustesRutas();
+      }
+    });
   });
 }
 

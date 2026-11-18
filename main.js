@@ -7,15 +7,76 @@ let mainWindow = null;
 
 const DEFAULT_CONFIG = {
   ubicacionActiva: 'entregables',
-  rutaIrec: '\\\\172.40.5.84\\irec',
-  rutaSsdirec: '\\\\172.40.5.84\\ssdirec',
-  rutaEntregables: '\\\\172.40.5.84\\ssdirec\\ENTREGABLES PROCESADOS FINANZAS',
   limiteResultados: 200,
   profundidadMaxima: 8,
   tiempoLimiteMs: 45000,
   buscarEnRuta: true,
   extensiones: ['pdf']
 };
+
+function getRutasPath() {
+  return path.join(__dirname, 'rutas.json');
+}
+
+function cargarRutas() {
+  try {
+    const rutasPath = getRutasPath();
+    if (fs.existsSync(rutasPath)) {
+      const data = fs.readFileSync(rutasPath, 'utf8');
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (err) {
+    console.error('Error cargando rutas.json:', err);
+  }
+  return [
+    {
+      id: 'entregables',
+      nombre: 'Entregables',
+      titulo: 'Entregables Finanzas',
+      descripcion: 'Subcarpeta con las entregas de finanzas (ENTREGA 1, ENTREGA 2, etc.)',
+      ruta: '\\\\172.40.5.84\\ssdirec\\ENTREGABLES PROCESADOS FINANZAS',
+      icono: 'box'
+    },
+    {
+      id: 'czur',
+      nombre: 'CZUR',
+      titulo: 'Respaldo RPP CZUR',
+      descripcion: 'Respaldo RPP 17-09-2026 CZUR (PC 01 a PC 06)',
+      ruta: '\\\\172.40.5.84\\ssdirec\\RESPALDO 17-09-2026\\RESPALDO RPP 17-09-2026\\CZUR',
+      icono: 'camera'
+    },
+    {
+      id: 'irec',
+      nombre: 'irec',
+      titulo: 'Servidor Principal (irec)',
+      descripcion: 'Carpeta compartida principal con Respaldo_Original, Libros y Notarías',
+      ruta: '\\\\172.40.5.84\\irec',
+      icono: 'folder'
+    },
+    {
+      id: 'ssdirec',
+      nombre: 'ssdirec',
+      titulo: 'Servidor Rápido (ssdirec)',
+      descripcion: 'Unidad de almacenamiento rápida ssdirec',
+      ruta: '\\\\172.40.5.84\\ssdirec',
+      icono: 'server'
+    }
+  ];
+}
+
+function guardarRutas(nuevasRutas) {
+  try {
+    const rutasPath = getRutasPath();
+    fs.writeFileSync(rutasPath, JSON.stringify(nuevasRutas, null, 2), 'utf8');
+    return { success: true, rutas: nuevasRutas };
+  } catch (err) {
+    console.error('Error guardando rutas.json:', err);
+    return { success: false, error: err.message };
+  }
+}
 
 function getConfigPath() {
   return path.join(app.getPath('userData'), 'config_buscador.json');
@@ -82,13 +143,22 @@ function createWindow() {
 }
 
 // IPC Handlers
+ipcMain.handle('obtener-rutas', () => {
+  return cargarRutas();
+});
+
+ipcMain.handle('guardar-rutas', (event, nuevasRutas) => {
+  const res = guardarRutas(nuevasRutas);
+  searchEngine.limpiarMemoria();
+  return res;
+});
+
 ipcMain.handle('buscar-archivos', async (event, options) => {
   try {
     const cfg = cargarConfig();
+    const rutas = cargarRutas();
     return await searchEngine.buscarArchivos({
-      rutaIrec: cfg.rutaIrec,
-      rutaSsdirec: cfg.rutaSsdirec,
-      rutaEntregables: cfg.rutaEntregables,
+      rutas,
       ubicacion: options?.ubicacion || cfg.ubicacionActiva || 'entregables',
       ...options
     });
@@ -107,10 +177,9 @@ ipcMain.handle('buscar-archivos', async (event, options) => {
 ipcMain.handle('listar-archivos-iniciales', async (event, options) => {
   try {
     const cfg = cargarConfig();
+    const rutas = cargarRutas();
     return await searchEngine.listarArchivosIniciales({
-      rutaIrec: cfg.rutaIrec,
-      rutaSsdirec: cfg.rutaSsdirec,
-      rutaEntregables: cfg.rutaEntregables,
+      rutas,
       ubicacion: options?.ubicacion || cfg.ubicacionActiva || 'entregables',
       ...options
     });
@@ -126,38 +195,38 @@ ipcMain.handle('listar-archivos-iniciales', async (event, options) => {
 
 ipcMain.handle('obtener-carpetas', async (event, options) => {
   const cfg = cargarConfig();
+  const rutas = cargarRutas();
   return await searchEngine.obtenerCarpetas({
-    rutaIrec: cfg.rutaIrec,
-    rutaSsdirec: cfg.rutaSsdirec,
-    rutaEntregables: cfg.rutaEntregables,
+    rutas,
     ubicacion: options?.ubicacion || cfg.ubicacionActiva || 'entregables',
     ...options
   });
 });
 
-ipcMain.handle('verificar-servidores', async (event, rutas) => {
-  const cfg = cargarConfig();
-  return await searchEngine.verificarServidores({
-    rutaIrec: rutas?.rutaIrec || cfg.rutaIrec,
-    rutaSsdirec: rutas?.rutaSsdirec || cfg.rutaSsdirec,
-    rutaEntregables: rutas?.rutaEntregables || cfg.rutaEntregables
-  });
+ipcMain.handle('verificar-servidores', async (event, rutasPersonalizadas) => {
+  const rutas = Array.isArray(rutasPersonalizadas) && rutasPersonalizadas.length > 0
+    ? rutasPersonalizadas
+    : cargarRutas();
+  return await searchEngine.verificarServidores(rutas);
 });
 
 ipcMain.handle('obtener-delegaciones', async (event, rutaBase) => {
-  const cfg = cargarConfig();
-  return await searchEngine.obtenerDelegaciones(rutaBase || cfg.rutaEntregables);
+  const rutas = cargarRutas();
+  const defaultRuta = (rutas.find(r => r.id === 'entregables') || rutas[0] || {}).ruta || '';
+  return await searchEngine.obtenerDelegaciones(rutaBase || defaultRuta);
 });
 
 ipcMain.handle('obtener-subcarpetas', async (event, args) => {
-  const cfg = cargarConfig();
-  const rutaBase = (args && args.rutaBase) || cfg.rutaEntregables;
+  const rutas = cargarRutas();
+  const defaultRuta = (rutas.find(r => r.id === 'entregables') || rutas[0] || {}).ruta || '';
+  const rutaBase = (args && args.rutaBase) || defaultRuta;
   return await searchEngine.obtenerSubcarpetas(args ? { ...args, rutaBase } : { rutaBase });
 });
 
 ipcMain.handle('verificar-ruta', async (event, ruta) => {
-  const cfg = cargarConfig();
-  return await searchEngine.verificarRuta(ruta || cfg.rutaEntregables);
+  const rutas = cargarRutas();
+  const defaultRuta = (rutas.find(r => r.id === 'entregables') || rutas[0] || {}).ruta || '';
+  return await searchEngine.verificarRuta(ruta || defaultRuta);
 });
 
 ipcMain.handle('abrir-archivo', async (event, rutaCompleta) => {

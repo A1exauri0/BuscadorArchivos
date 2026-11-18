@@ -1,10 +1,78 @@
 const fs = require('fs');
 const path = require('path');
 
+function getRutasPath() {
+  return path.join(__dirname, 'rutas.json');
+}
+
+function cargarRutasBase() {
+  try {
+    const rutasPath = getRutasPath();
+    if (fs.existsSync(rutasPath)) {
+      const data = fs.readFileSync(rutasPath, 'utf8');
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (err) {
+    console.error('Error cargando rutas.json en searchEngine:', err);
+  }
+  return [
+    {
+      id: 'entregables',
+      nombre: 'Entregables',
+      titulo: 'Entregables Finanzas',
+      descripcion: 'Subcarpeta con las entregas de finanzas (ENTREGA 1, ENTREGA 2, etc.)',
+      ruta: '\\\\172.40.5.84\\ssdirec\\ENTREGABLES PROCESADOS FINANZAS',
+      icono: 'box'
+    },
+    {
+      id: 'czur',
+      nombre: 'CZUR',
+      titulo: 'Respaldo RPP CZUR',
+      descripcion: 'Respaldo RPP 17-09-2026 CZUR (PC 01 a PC 06)',
+      ruta: '\\\\172.40.5.84\\ssdirec\\RESPALDO 17-09-2026\\RESPALDO RPP 17-09-2026\\CZUR',
+      icono: 'camera'
+    },
+    {
+      id: 'irec',
+      nombre: 'irec',
+      titulo: 'Servidor Principal (irec)',
+      descripcion: 'Carpeta compartida principal con Respaldo_Original, Libros y Notarías',
+      ruta: '\\\\172.40.5.84\\irec',
+      icono: 'folder'
+    },
+    {
+      id: 'ssdirec',
+      nombre: 'ssdirec',
+      titulo: 'Servidor Rápido (ssdirec)',
+      descripcion: 'Unidad de almacenamiento rápida ssdirec',
+      ruta: '\\\\172.40.5.84\\ssdirec',
+      icono: 'server'
+    }
+  ];
+}
+
+function resolverRutas(options = {}) {
+  if (Array.isArray(options.rutas) && options.rutas.length > 0) {
+    return options.rutas;
+  }
+  return cargarRutasBase();
+}
+
+function obtenerRutaPorId(rutas, id) {
+  const item = (rutas || []).find(r => r.id === id);
+  if (item && item.ruta) return item.ruta;
+  const def = (rutas || []).find(r => r.id === 'entregables') || (rutas || [])[0];
+  return def ? def.ruta : '';
+}
+
 const RUTAS_DEFAULT = {
-  rutaIrec: '\\\\172.40.5.84\\irec',
-  rutaSsdirec: '\\\\172.40.5.84\\ssdirec',
-  rutaEntregables: '\\\\172.40.5.84\\ssdirec\\ENTREGABLES PROCESADOS FINANZAS'
+  get rutaIrec() { return obtenerRutaPorId(cargarRutasBase(), 'irec'); },
+  get rutaSsdirec() { return obtenerRutaPorId(cargarRutasBase(), 'ssdirec'); },
+  get rutaEntregables() { return obtenerRutaPorId(cargarRutasBase(), 'entregables'); },
+  get rutaCzur() { return obtenerRutaPorId(cargarRutasBase(), 'czur'); }
 };
 
 // Memoria caché para resultados frecuentes y navegación instantánea
@@ -45,16 +113,29 @@ async function esDirectorioValido(dir) {
   }
 }
 
-function determinarAlmacenamiento(rutaCompleta) {
-  const lc = (rutaCompleta || '').toLowerCase();
-  if (lc.includes('entregables procesados finanzas') || lc.includes('entregables')) return 'entregables';
+function determinarAlmacenamiento(rutaCompleta, rutasInput) {
+  if (!rutaCompleta) return 'general';
+  const rutas = Array.isArray(rutasInput) && rutasInput.length > 0 ? rutasInput : cargarRutasBase();
+  const lc = rutaCompleta.toLowerCase().replace(/\//g, '\\');
+  const ordenadas = [...rutas].sort((a, b) => (b.ruta || '').length - (a.ruta || '').length);
+  for (const r of ordenadas) {
+    if (r.ruta && lc.startsWith(r.ruta.toLowerCase().replace(/\//g, '\\'))) {
+      return r.id;
+    }
+  }
+  if (lc.includes('czur')) return 'czur';
+  if (lc.includes('entregables')) return 'entregables';
   if (lc.includes('ssdirec')) return 'ssdirec';
   if (lc.includes('irec')) return 'irec';
   return 'general';
 }
 
 function extraerCarpetaODelegacion(rutaCompleta, rutaBase) {
-  const lc = (rutaCompleta || '').toLowerCase();
+  if (!rutaCompleta) return 'Raíz';
+
+  const matchCzur = rutaCompleta.match(/CZUR[\\/]([^\\/]+(?:[\\/][^\\/]+)?)/i);
+  if (matchCzur) return matchCzur[1].replace(/[\\/]/g, ' \\ ');
+
   const matchRespaldo = rutaCompleta.match(/Respaldo_Original[\\/]([^\\/]+)/i);
   if (matchRespaldo) return matchRespaldo[1];
 
@@ -65,7 +146,7 @@ function extraerCarpetaODelegacion(rutaCompleta, rutaBase) {
     try {
       const rel = path.relative(rutaBase, rutaCompleta);
       const dir = path.dirname(rel);
-      if (dir && dir !== '.') return dir.split(/[\\/]/).join(' \\ ');
+      if (dir && dir !== '.') return dir.split(/[\\/]/).slice(0, 2).join(' \\ ');
     } catch (e) {}
   }
 
@@ -78,7 +159,7 @@ function extraerCarpetaODelegacion(rutaCompleta, rutaBase) {
 }
 
 async function verificarRuta(ruta) {
-  const rutaChequeo = ruta || RUTAS_DEFAULT.rutaEntregables;
+  const rutaChequeo = ruta || obtenerRutaPorId(cargarRutasBase(), 'entregables');
   try {
     await fs.promises.access(rutaChequeo, fs.constants.R_OK);
     return {
@@ -97,81 +178,72 @@ async function verificarRuta(ruta) {
   }
 }
 
-async function verificarServidores(rutas = {}) {
-  const rutaIrec = rutas.rutaIrec || RUTAS_DEFAULT.rutaIrec;
-  const rutaSsdirec = rutas.rutaSsdirec || RUTAS_DEFAULT.rutaSsdirec;
-  const rutaEntregables = rutas.rutaEntregables || RUTAS_DEFAULT.rutaEntregables;
+async function verificarServidores(rutasInput = null) {
+  let rutas = [];
+  if (Array.isArray(rutasInput) && rutasInput.length > 0) {
+    rutas = rutasInput;
+  } else if (rutasInput && typeof rutasInput === 'object' && Array.isArray(rutasInput.rutas)) {
+    rutas = rutasInput.rutas;
+  } else {
+    rutas = cargarRutasBase();
+  }
 
-  const [okIrec, okSsd, okEntregables] = await Promise.all([
-    esDirectorioValido(rutaIrec),
-    esDirectorioValido(rutaSsdirec),
-    esDirectorioValido(rutaEntregables)
-  ]);
+  const checks = await Promise.all(
+    rutas.map(async (r) => {
+      const ok = await esDirectorioValido(r.ruta);
+      return {
+        id: r.id,
+        nombre: r.nombre || r.id,
+        ruta: r.ruta,
+        conectado: ok
+      };
+    })
+  );
 
-  const conectados = [];
-  if (okIrec) conectados.push('irec');
-  if (okSsd) conectados.push('ssdirec');
-  if (okEntregables) conectados.push('entregables');
-
+  const conectados = checks.filter(c => c.conectado);
   const conectado = conectados.length > 0;
-  const todoConectado = okIrec && okSsd && okEntregables;
+  const todoConectado = checks.length > 0 && conectados.length === checks.length;
 
   let mensaje = '';
   if (todoConectado) {
-    mensaje = 'Todas las ubicaciones conectadas (irec, ssdirec, entregables)';
+    mensaje = `Todas las ubicaciones conectadas (${checks.map(c => c.nombre).join(', ')})`;
   } else if (conectado) {
-    mensaje = `Conectado a: ${conectados.join(', ')}`;
+    mensaje = `Conectado a: ${conectados.map(c => c.nombre).join(', ')}`;
   } else {
     mensaje = 'Sin conexión a los servidores de red';
   }
 
-  return {
+  const resultado = {
     conectado,
     todoConectado,
-    irec: okIrec,
-    ssdirec: okSsd,
-    entregables: okEntregables,
-    rutas: { rutaIrec, rutaSsdirec, rutaEntregables },
+    servidores: checks,
+    rutas: Object.fromEntries(checks.map(c => [c.id, c.ruta])),
     mensaje
   };
+
+  checks.forEach(c => {
+    resultado[c.id] = c.conectado;
+  });
+
+  return resultado;
 }
 
 /**
  * Obtener carpetas principales para el árbol del explorador
  */
 async function obtenerCarpetas(options = {}) {
+  const rutas = resolverRutas(options);
   const ubicacion = options.ubicacion || options.almacenamiento || 'entregables';
-  const rutaIrec = options.rutaIrec || RUTAS_DEFAULT.rutaIrec;
-  const rutaSsdirec = options.rutaSsdirec || RUTAS_DEFAULT.rutaSsdirec;
-  const rutaEntregables = options.rutaEntregables || RUTAS_DEFAULT.rutaEntregables;
 
   if (ubicacion === 'todas') {
-    const carpetasRaices = [
-      {
-        nombre: 'irec',
-        subruta: '',
-        rutaCompleta: rutaIrec,
-        ubicacion: 'irec',
-        tipo: 'directorio',
-        esRaizUbicacion: true
-      },
-      {
-        nombre: 'ssdirec',
-        subruta: '',
-        rutaCompleta: rutaSsdirec,
-        ubicacion: 'ssdirec',
-        tipo: 'directorio',
-        esRaizUbicacion: true
-      },
-      {
-        nombre: 'ENTREGABLES PROCESADOS FINANZAS',
-        subruta: '',
-        rutaCompleta: rutaEntregables,
-        ubicacion: 'entregables',
-        tipo: 'directorio',
-        esRaizUbicacion: true
-      }
-    ];
+    const carpetasRaices = rutas.map(r => ({
+      nombre: r.nombre || r.id,
+      subruta: '',
+      rutaCompleta: r.ruta,
+      ubicacion: r.id,
+      tipo: 'directorio',
+      esRaizUbicacion: true
+    }));
     return {
       conectado: true,
       carpetas: carpetasRaices,
@@ -182,9 +254,7 @@ async function obtenerCarpetas(options = {}) {
 
   let rutaBase = options.rutaBase;
   if (!rutaBase) {
-    if (ubicacion === 'irec') rutaBase = rutaIrec;
-    else if (ubicacion === 'ssdirec') rutaBase = rutaSsdirec;
-    else rutaBase = rutaEntregables;
+    rutaBase = obtenerRutaPorId(rutas, ubicacion);
   }
 
   const cacheKey = `carpetas_raiz:::${ubicacion}:::${rutaBase}`;
@@ -246,8 +316,10 @@ async function obtenerCarpetas(options = {}) {
   }
 }
 
-async function obtenerDelegaciones(rutaBase = RUTAS_DEFAULT.rutaEntregables) {
-  const res = await obtenerCarpetas({ rutaBase });
+async function obtenerDelegaciones(rutaBase = null) {
+  const rutas = cargarRutasBase();
+  const rutaDefault = rutaBase || obtenerRutaPorId(rutas, 'entregables');
+  const res = await obtenerCarpetas({ rutaBase: rutaDefault, rutas });
   return {
     conectado: res.conectado,
     delegaciones: res.carpetas || [],
@@ -322,16 +394,12 @@ function coincideConPalabras(nombreArchivo, rutaCompleta, palabras, buscarEnRuta
  * Listar archivos iniciales (para vista inicial o al seleccionar una carpeta)
  */
 async function listarArchivosIniciales(options = {}) {
+  const rutas = resolverRutas(options);
   const ubicacion = options.ubicacion || options.almacenamiento || 'entregables';
-  const rutaIrec = options.rutaIrec || RUTAS_DEFAULT.rutaIrec;
-  const rutaSsdirec = options.rutaSsdirec || RUTAS_DEFAULT.rutaSsdirec;
-  const rutaEntregables = options.rutaEntregables || RUTAS_DEFAULT.rutaEntregables;
 
   let rutaBase = options.rutaBase;
   if (!rutaBase) {
-    if (ubicacion === 'irec') rutaBase = rutaIrec;
-    else if (ubicacion === 'ssdirec') rutaBase = rutaSsdirec;
-    else rutaBase = rutaEntregables;
+    rutaBase = obtenerRutaPorId(rutas, ubicacion);
   }
 
   const carpeta = options.carpeta || options.delegacion || '';
@@ -372,7 +440,7 @@ async function listarArchivosIniciales(options = {}) {
             nombre: e.name,
             rutaCompleta: full,
             rutaRelativa: rutaBase && rutaBase !== 'todas' ? path.relative(rutaBase, full) : e.name,
-            almacenamiento: determinarAlmacenamiento(full),
+            almacenamiento: determinarAlmacenamiento(full, rutas),
             delegacion: extraerCarpetaODelegacion(full, rutaBase)
           });
         } else if (e.isDirectory() && e.name !== 'lost+found') {
@@ -390,9 +458,12 @@ async function listarArchivosIniciales(options = {}) {
   }
 
   if (ubicacion === 'todas' && !options.rutaCompleta && !carpeta) {
-    await escanearRapido(rutaEntregables, Math.floor(limite / 2));
-    if (encontrados.length < limite) {
-      await escanearRapido(rutaIrec, limite);
+    const porcion = Math.max(15, Math.floor(limite / Math.max(1, rutas.length)));
+    for (const r of rutas) {
+      if (encontrados.length >= limite) break;
+      if (await esDirectorioValido(r.ruta)) {
+        await escanearRapido(r.ruta, porcion);
+      }
     }
   } else {
     await escanearRapido(dirObjetivo, limite);
@@ -432,19 +503,15 @@ async function listarArchivosIniciales(options = {}) {
 }
 
 /**
- * Búsqueda de archivos recursiva y multi-palabra con soporte para las 4 ubicaciones
+ * Búsqueda de archivos recursiva y multi-palabra con soporte para todas las rutas dinámicas
  */
 async function buscarArchivos(options = {}) {
+  const rutas = resolverRutas(options);
   const ubicacion = options.ubicacion || options.almacenamiento || 'entregables';
-  const rutaIrec = options.rutaIrec || RUTAS_DEFAULT.rutaIrec;
-  const rutaSsdirec = options.rutaSsdirec || RUTAS_DEFAULT.rutaSsdirec;
-  const rutaEntregables = options.rutaEntregables || RUTAS_DEFAULT.rutaEntregables;
 
   let rutaBase = options.rutaBase;
   if (!rutaBase) {
-    if (ubicacion === 'irec') rutaBase = rutaIrec;
-    else if (ubicacion === 'ssdirec') rutaBase = rutaSsdirec;
-    else rutaBase = rutaEntregables;
+    rutaBase = obtenerRutaPorId(rutas, ubicacion);
   }
 
   const queryRaw = options.query || options.palabras || '';
@@ -467,10 +534,8 @@ async function buscarArchivos(options = {}) {
   // Si no hay palabras ni carpeta y no hay rutaCompleta, listar iniciales
   if (palabras.length === 0 && !carpetaFiltro && !options.rutaCompleta) {
     return await listarArchivosIniciales({
+      rutas,
       ubicacion,
-      rutaIrec,
-      rutaSsdirec,
-      rutaEntregables,
       rutaBase,
       limite
     });
@@ -483,20 +548,19 @@ async function buscarArchivos(options = {}) {
     raicesEscaneo.push(options.rutaCompleta);
   } else if (ubicacion === 'todas') {
     if (carpetaFiltro) {
-      const candEnt = path.join(rutaEntregables, carpetaFiltro);
-      const candIrec = path.join(rutaIrec, carpetaFiltro);
-      const candSsd = path.join(rutaSsdirec, carpetaFiltro);
-      if (await esDirectorioValido(candEnt)) raicesEscaneo.push(candEnt);
-      if (await esDirectorioValido(candIrec)) raicesEscaneo.push(candIrec);
-      if (await esDirectorioValido(candSsd)) raicesEscaneo.push(candSsd);
+      for (const r of rutas) {
+        const cand = path.join(r.ruta, carpetaFiltro);
+        if (await esDirectorioValido(cand)) raicesEscaneo.push(cand);
+      }
       if (raicesEscaneo.length === 0) {
-        if (await esDirectorioValido(rutaEntregables)) raicesEscaneo.push(rutaEntregables);
-        if (await esDirectorioValido(rutaIrec)) raicesEscaneo.push(rutaIrec);
+        for (const r of rutas) {
+          if (await esDirectorioValido(r.ruta)) raicesEscaneo.push(r.ruta);
+        }
       }
     } else {
-      if (await esDirectorioValido(rutaEntregables)) raicesEscaneo.push(rutaEntregables);
-      if (await esDirectorioValido(rutaIrec)) raicesEscaneo.push(rutaIrec);
-      if (await esDirectorioValido(rutaSsdirec)) raicesEscaneo.push(rutaSsdirec);
+      for (const r of rutas) {
+        if (await esDirectorioValido(r.ruta)) raicesEscaneo.push(r.ruta);
+      }
     }
   } else {
     let raizTarget = rutaBase;
@@ -505,7 +569,7 @@ async function buscarArchivos(options = {}) {
       if (await esDirectorioValido(candidate)) {
         raizTarget = candidate;
       } else if (ubicacion === 'irec') {
-        const candRespaldo = path.join(rutaIrec, 'Respaldo_Original', carpetaFiltro);
+        const candRespaldo = path.join(raizTarget, 'Respaldo_Original', carpetaFiltro);
         if (await esDirectorioValido(candRespaldo)) raizTarget = candRespaldo;
       }
     }
@@ -578,7 +642,7 @@ async function buscarArchivos(options = {}) {
               nombre: entry.name,
               rutaCompleta: rutaCompleta,
               rutaRelativa: rutaBase && rutaBase !== 'todas' ? path.relative(rutaBase, rutaCompleta) : entry.name,
-              almacenamiento: determinarAlmacenamiento(rutaCompleta),
+              almacenamiento: determinarAlmacenamiento(rutaCompleta, rutas),
               delegacion: extraerCarpetaODelegacion(rutaCompleta, rutaBase),
               tamanoBytes: stat.size,
               tamanoFormateado: formatearTamano(stat.size),

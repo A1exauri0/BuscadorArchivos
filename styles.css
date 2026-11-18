@@ -110,6 +110,32 @@ textarea {
   box-shadow: var(--shadow-sm);
 }
 
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn-icon-sidebar {
+  padding: 6px 9px;
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-icon-sidebar:hover {
+  background: #f1f5f9;
+  color: var(--primary);
+  border-color: #cbd5e1;
+}
+
+.btn-icon-sidebar.active {
+  background: #e2e8f0;
+  color: var(--primary);
+}
+
 .header-brand {
   display: flex;
   align-items: center;
@@ -281,6 +307,16 @@ textarea {
   flex-direction: column;
   flex-shrink: 0;
   overflow: hidden;
+  transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.18s ease;
+}
+
+.app-sidebar.collapsed {
+  width: 0 !important;
+  min-width: 0 !important;
+  border-right: none;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
 }
 
 /* SELECTOR DE UBICACIÓN DE BÚSQUEDA (4 OPCIONES) */
@@ -331,6 +367,10 @@ textarea {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
+.storage-tab[data-storage="todas"] {
+  grid-column: 1 / -1;
+}
+
 .storage-tab svg {
   flex-shrink: 0;
 }
@@ -347,6 +387,12 @@ textarea {
   letter-spacing: 0.3px;
   margin-right: 5px;
   vertical-align: middle;
+}
+
+.badge-location.czur {
+  background: #f3e8ff;
+  color: #7e22ce;
+  border: 1px solid #e9d5ff;
 }
 
 .badge-location.irec {

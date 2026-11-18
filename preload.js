@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   copiarPortapapeles: (texto) => ipcRenderer.invoke('copiar-portapapeles', texto),
   obtenerConfig: () => ipcRenderer.invoke('obtener-config'),
   guardarConfig: (config) => ipcRenderer.invoke('guardar-config', config),
+  obtenerRutas: () => ipcRenderer.invoke('obtener-rutas'),
+  guardarRutas: (rutas) => ipcRenderer.invoke('guardar-rutas', rutas),
   seleccionarCarpeta: () => ipcRenderer.invoke('seleccionar-carpeta'),
   minimizarVentana: () => ipcRenderer.invoke('minimizar-ventana'),
   maximizarVentana: () => ipcRenderer.invoke('maximizar-ventana'),

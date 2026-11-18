@@ -1,0 +1,34 @@
+[
+  {
+    "id": "entregables",
+    "nombre": "Entregables",
+    "titulo": "Entregables Finanzas",
+    "descripcion": "Subcarpeta con las entregas de finanzas (ENTREGA 1, ENTREGA 2, etc.)",
+    "ruta": "\\\\172.40.5.84\\ssdirec\\ENTREGABLES PROCESADOS FINANZAS",
+    "icono": "box"
+  },
+  {
+    "id": "czur",
+    "nombre": "CZUR",
+    "titulo": "Respaldo RPP CZUR",
+    "descripcion": "Respaldo RPP 17-09-2026 CZUR (PC 01 a PC 06)",
+    "ruta": "\\\\172.40.5.84\\ssdirec\\RESPALDO 17-09-2026\\RESPALDO RPP 17-09-2026\\CZUR",
+    "icono": "camera"
+  },
+  {
+    "id": "irec",
+    "nombre": "irec",
+    "titulo": "Servidor Principal (irec)",
+    "descripcion": "Carpeta compartida principal con Respaldo_Original, Libros y Notarías",
+    "ruta": "\\\\172.40.5.84\\irec",
+    "icono": "folder"
+  },
+  {
+    "id": "ssdirec",
+    "nombre": "ssdirec",
+    "titulo": "Servidor Rápido (ssdirec)",
+    "descripcion": "Unidad de almacenamiento rápida ssdirec",
+    "ruta": "\\\\172.40.5.84\\ssdirec",
+    "icono": "server"
+  }
+]

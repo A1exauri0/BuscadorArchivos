@@ -14,6 +14,13 @@
     <!-- Barra Superior / Header (Navbar limpia: solo estado de conexión y ajustes) -->
     <header class="app-header">
       <div class="header-left">
+        <button id="btn-toggle-sidebar" class="btn-header btn-icon-sidebar" title="Ocultar/Mostrar barra lateral (Ctrl+B)">
+          <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        </button>
         <div id="connection-status" class="status-pill checking">
           <span class="status-dot"></span>
           <span id="status-text">Verificando conexión...</span>
@@ -37,38 +44,11 @@
     <div class="app-body">
       <!-- Sidebar Izquierdo: Explorador de Archivos -->
       <aside class="app-sidebar">
-        <!-- Selector de Ubicación de Búsqueda (4 opciones) -->
+        <!-- Selector de Ubicación de Búsqueda (Pestañas Dinámicas desde rutas.json) -->
         <div class="storage-selector-zone">
           <span class="section-title">UBICACIÓN DE BÚSQUEDA</span>
-          <div class="storage-tabs">
-            <button type="button" class="storage-tab" data-storage="irec" title="Buscar en irec (\\172.40.5.84\irec)">
-              <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none">
-                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-              </svg>
-              <span>irec</span>
-            </button>
-            <button type="button" class="storage-tab" data-storage="ssdirec" title="Buscar en ssdirec (\\172.40.5.84\ssdirec)">
-              <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none">
-                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-              </svg>
-              <span>ssdirec</span>
-            </button>
-            <button type="button" class="storage-tab active" data-storage="entregables" title="Buscar en Entregables Finanzas">
-              <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none">
-                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-                <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-                <line x1="12" y1="22.08" x2="12" y2="12"></line>
-              </svg>
-              <span>Entregables</span>
-            </button>
-            <button type="button" class="storage-tab" data-storage="todas" title="Buscar en todas las ubicaciones">
-              <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none">
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="2" y1="12" x2="22" y2="12"></line>
-                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-              </svg>
-              <span>Todas</span>
-            </button>
+          <div class="storage-tabs" id="storage-tabs-container">
+            <!-- Pestañas generadas dinámicamente desde rutas.json -->
           </div>
         </div>
 
@@ -314,31 +294,18 @@
           <button id="btn-close-settings" class="btn-modal-close">&times;</button>
         </div>
         <div class="modal-body">
-          <div class="settings-form-group">
-            <label for="cfg-ruta-irec">1. Servidor Principal (irec):</label>
-            <div class="input-with-browse">
-              <input type="text" id="cfg-ruta-irec" placeholder="\\172.40.5.84\irec">
-              <button id="btn-browse-irec" class="btn-secondary" title="Examinar carpeta">Examinar</button>
-            </div>
-            <span class="input-help">Carpeta compartida principal con Respaldo_Original, Libros y Notarías.</span>
+          <div id="settings-rutas-dinamicas">
+            <!-- Las rutas configuradas en rutas.json se renderizan aquí dinámicamente -->
           </div>
 
-          <div class="settings-form-group">
-            <label for="cfg-ruta-ssdirec">2. Servidor Rápido (ssdirec):</label>
-            <div class="input-with-browse">
-              <input type="text" id="cfg-ruta-ssdirec" placeholder="\\172.40.5.84\ssdirec">
-              <button id="btn-browse-ssdirec" class="btn-secondary" title="Examinar carpeta">Examinar</button>
-            </div>
-            <span class="input-help">Unidad de almacenamiento rápida ssdirec.</span>
-          </div>
-
-          <div class="settings-form-group">
-            <label for="cfg-ruta-entregables">3. Entregables Finanzas:</label>
-            <div class="input-with-browse">
-              <input type="text" id="cfg-ruta-entregables" placeholder="\\172.40.5.84\ssdirec\ENTREGABLES PROCESADOS FINANZAS">
-              <button id="btn-browse-entregables" class="btn-secondary" title="Examinar carpeta">Examinar</button>
-            </div>
-            <span class="input-help">Subcarpeta con las entregas de finanzas (ENTREGA 1, ENTREGA 2, etc.).</span>
+          <div style="margin-top: 8px; margin-bottom: 16px; display: flex; justify-content: flex-end;">
+            <button id="btn-add-new-route" type="button" class="btn-secondary" style="font-size: 12px; padding: 6px 14px; display: inline-flex; align-items: center; gap: 6px;">
+              <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2.2" fill="none">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              <span>+ Agregar Nueva Ubicación</span>
+            </button>
           </div>
 
           <div class="settings-form-group">

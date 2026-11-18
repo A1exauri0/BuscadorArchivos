@@ -38,6 +38,7 @@ Aplicación de escritorio moderna, ultrarrápida y con interfaz visual de alta f
 c:\laragon\www\BuscadorArchivos\
 ├── .gitignore              # Ignora node_modules y archivos temporales
 ├── package.json            # Configuración de dependencias y scripts
+├── rutas.json              # Configuración centralizada y dinámica de rutas de red
 ├── main.js                 # Proceso principal de Electron (Ventanas, IPC, diálogo nativo)
 ├── preload.js              # Puente seguro de contexto (contextBridge) entre Main y Renderer
 ├── searchEngine.js         # Motor optimizado de búsqueda y escaneo en red SMB
@@ -46,6 +47,41 @@ c:\laragon\www\BuscadorArchivos\
 ├── renderer.js             # Lógica del cliente, eventos, atajos de teclado y CSV
 └── README.md               # Documentación y guía de uso
 ```
+
+---
+
+## 📁 Gestión Centralizada de Rutas (`rutas.json`)
+
+Todas las rutas y servidores de red están centralizados en un único archivo: **[`rutas.json`](file:///c:/laragon/www/BuscadorArchivos/rutas.json)**.
+El programa lee este archivo al iniciar y genera dinámicamente las pestañas de selección, el explorador de carpetas y los filtros de búsqueda.
+
+Rutas configuradas por defecto:
+1. **Entregables Finanzas**: `\\172.40.5.84\ssdirec\ENTREGABLES PROCESADOS FINANZAS`
+2. **CZUR (Respaldo RPP)**: `\\172.40.5.84\ssdirec\RESPALDO 17-09-2026\RESPALDO RPP 17-09-2026\CZUR`
+3. **Servidor Principal (irec)**: `\\172.40.5.84\irec`
+4. **Servidor Rápido (ssdirec)**: `\\172.40.5.84\ssdirec`
+
+### ¿Cómo agregar una nueva ruta en el futuro?
+Puedes hacerlo de dos formas:
+
+1. **Desde la aplicación (Recomendado)**:
+   - Haz clic en el botón **Ajustes** en la esquina superior derecha.
+   - Haz clic en **+ Agregar Nueva Ubicación**, escribe el nombre y la ruta de red.
+   - Haz clic en **Guardar Configuración**. Se creará la nueva pestaña en el menú al instante.
+
+2. **Directamente en `rutas.json`**:
+   - Abre `rutas.json` y agrega un nuevo bloque con este formato:
+   ```json
+   {
+     "id": "nueva_carpeta",
+     "nombre": "Mi Carpeta",
+     "titulo": "Descripción de la Carpeta",
+     "descripcion": "Detalles adicionales",
+     "ruta": "\\\\172.40.5.84\\ssdirec\\MI_NUEVA_CARPETA",
+     "icono": "folder"
+   }
+   ```
+   - Al reiniciar o guardar, aparecerá automáticamente en el menú de pestañas y en las búsquedas globales ("Todas").
 
 ---
 
@@ -128,8 +164,10 @@ npm run dist
 
 ## ⌨️ Atajos de Teclado
 
+- <kbd>Ctrl</kbd> + <kbd>B</kbd>: Ocultar o mostrar la barra lateral (Sidebar con botón hamburguesa).
 - <kbd>Enter</kbd>: Ejecutar búsqueda inmediatamente.
 - <kbd>Ctrl</kbd> + <kbd>F</kbd>: Enfocar la barra de búsqueda y seleccionar el texto.
 - <kbd>Esc</kbd>: Limpiar la búsqueda o cerrar modales activos.
+- <kbd>F12</kbd>: Abrir la consola de desarrollador (DevTools).
 
 ---
