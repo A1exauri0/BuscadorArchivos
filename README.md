@@ -36,23 +36,33 @@ Aplicación de escritorio moderna, ultrarrápida y con interfaz visual de alta f
 
 ```text
 c:\laragon\www\BuscadorArchivos\
-├── .gitignore              # Ignora node_modules y archivos temporales
-├── package.json            # Configuración de dependencias y scripts
-├── rutas.json              # Configuración centralizada y dinámica de rutas de red
-├── main.js                 # Proceso principal de Electron (Ventanas, IPC, diálogo nativo)
-├── preload.js              # Puente seguro de contexto (contextBridge) entre Main y Renderer
-├── searchEngine.js         # Motor optimizado de búsqueda y escaneo en red SMB
-├── index.html              # Estructura de la interfaz de escritorio
-├── styles.css              # Sistema de estilos oscuro premium
-├── renderer.js             # Lógica del cliente, eventos, atajos de teclado y CSV
+├── assets/                 # Iconos y recursos visuales (icon.ico, icon.png)
+│   ├── icon.ico
+│   └── icon.png
+├── config/                 # Configuración centralizada de rutas de red
+│   └── rutas.json
+├── dist/                   # Instaladores y ejecutables compilados (.exe)
+├── src/
+│   ├── main/               # Proceso Principal de Electron
+│   │   ├── main.js         # Ventanas nativas, eventos IPC y ciclo de vida
+│   │   ├── preload.js      # ContextBridge seguro hacia el Renderer
+│   │   └── searchEngine.js # Motor de búsqueda optimizado para SMB y escaneo
+│   └── renderer/           # Interfaz de Usuario (UI)
+│       ├── index.html      # Estructura del panel de escritorio
+│       ├── styles.css      # Estilos modernos, temas y sidebar colapsable
+│       └── renderer.js     # Lógica visual, chips de búsqueda y atajos
+├── package.json            # Scripts, dependencias y configuración de compilación
+├── pnpm-lock.yaml          # Control de versiones de pnpm
+├── pnpm-workspace.yaml     # Permisos de dependencias nativas
+├── .gitignore              # Ignora node_modules, dist/ y temporales
 └── README.md               # Documentación y guía de uso
 ```
 
 ---
 
-## 📁 Gestión Centralizada de Rutas (`rutas.json`)
+## 📁 Gestión Centralizada de Rutas (`config/rutas.json`)
 
-Todas las rutas y servidores de red están centralizados en un único archivo: **[`rutas.json`](file:///c:/laragon/www/BuscadorArchivos/rutas.json)**.
+Todas las rutas y servidores de red están centralizados en un único archivo: **[`config/rutas.json`](file:///c:/laragon/www/BuscadorArchivos/config/rutas.json)**.
 El programa lee este archivo al iniciar y genera dinámicamente las pestañas de selección, el explorador de carpetas y los filtros de búsqueda.
 
 Rutas configuradas por defecto:

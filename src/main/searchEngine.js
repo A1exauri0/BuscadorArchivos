@@ -2,7 +2,12 @@ const fs = require('fs');
 const path = require('path');
 
 function getRutasPath() {
-  return path.join(__dirname, 'rutas.json');
+  const appRoot = path.resolve(__dirname, '../..');
+  const configPath = path.join(appRoot, 'config', 'rutas.json');
+  if (fs.existsSync(configPath)) return configPath;
+  const rootPath = path.join(appRoot, 'rutas.json');
+  if (fs.existsSync(rootPath)) return rootPath;
+  return configPath;
 }
 
 function cargarRutasBase() {

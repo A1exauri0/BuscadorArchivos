@@ -2,12 +2,12 @@
   "name": "buscador-archivos",
   "version": "1.0.0",
   "description": "Aplicacion de escritorio moderna para busqueda inteligente de archivos PDF en red",
-  "main": "main.js",
+  "main": "src/main/main.js",
   "scripts": {
     "start": "electron .",
     "dev": "electron .",
-    "dist": "electron-builder --win",
-    "build": "electron-builder --win"
+    "build": "electron-builder --win",
+    "dist": "electron-builder --win"
   },
   "build": {
     "appId": "com.irec.buscadorarchivos",
@@ -16,9 +16,10 @@
       "output": "dist"
     },
     "files": [
-      "**/*",
-      "!dist/**",
-      "!*.log"
+      "src/**/*",
+      "assets/**/*",
+      "config/**/*",
+      "package.json"
     ],
     "win": {
       "target": [
@@ -35,7 +36,7 @@
           ]
         }
       ],
-      "icon": "icon.ico"
+      "icon": "assets/icon.ico"
     },
     "nsis": {
       "oneClick": false,

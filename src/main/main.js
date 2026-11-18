@@ -15,7 +15,19 @@ const DEFAULT_CONFIG = {
 };
 
 function getRutasPath() {
-  return path.join(__dirname, 'rutas.json');
+  try {
+    const userRutas = path.join(app.getPath('userData'), 'rutas.json');
+    if (fs.existsSync(userRutas)) return userRutas;
+  } catch (e) {}
+
+  const appRoot = app.isPackaged ? app.getAppPath() : path.resolve(__dirname, '../..');
+  const configPath = path.join(appRoot, 'config', 'rutas.json');
+  if (fs.existsSync(configPath)) return configPath;
+
+  const rootPath = path.join(appRoot, 'rutas.json');
+  if (fs.existsSync(rootPath)) return rootPath;
+
+  return configPath;
 }
 
 function cargarRutas() {
@@ -69,7 +81,12 @@ function cargarRutas() {
 
 function guardarRutas(nuevasRutas) {
   try {
-    const rutasPath = getRutasPath();
+    let rutasPath;
+    if (app.isPackaged) {
+      rutasPath = path.join(app.getPath('userData'), 'rutas.json');
+    } else {
+      rutasPath = path.join(path.resolve(__dirname, '../..'), 'config', 'rutas.json');
+    }
     fs.writeFileSync(rutasPath, JSON.stringify(nuevasRutas, null, 2), 'utf8');
     return { success: true, rutas: nuevasRutas };
   } catch (err) {
@@ -116,7 +133,7 @@ function createWindow() {
     minHeight: 700,
     backgroundColor: '#f8fafc',
     title: 'Buscador de Expedientes - ENTREGABLES PROCESADOS FINANZAS',
-    icon: path.join(__dirname, 'icon.png'),
+    icon: path.join(__dirname, '../../assets/icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -135,7 +152,7 @@ function createWindow() {
     }
   });
 
-  mainWindow.loadFile('index.html');
+  mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
 
   mainWindow.on('closed', () => {
     mainWindow = null;
