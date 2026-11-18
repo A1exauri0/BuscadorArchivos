@@ -49,24 +49,80 @@ c:\laragon\www\BuscadorArchivos\
 
 ---
 
-## 💻 Instrucciones para Ejecutar en Laragon / Windows
+## 💻 Instrucciones para Instalar y Ejecutar en Windows / Laragon
 
-### 1. Abrir una terminal en el directorio del proyecto
+### 1. Abrir la terminal en la carpeta del proyecto
 ```powershell
-cd c:\laragon\www\BuscadorArchivos
+cd C:\laragon\www\BuscadorArchivos
 ```
 
-### 2. Asegurar que Node.js esté en el PATH (si usas Laragon)
-```powershell
-$env:PATH = "C:\laragon\bin\nodejs\node-v22;$env:PATH"
+### 2. Configurar Node.js y pnpm en el PATH (si no están agregados permanentemente)
+
+> **Nota:** `C:\laragon\bin\nodejs\node-v22` ya fue agregado a las variables de entorno de tu usuario de Windows. Solo necesitas abrir una **nueva ventana de terminal** para que se detecte automáticamente.
+
+Si en tu sesión actual de consola aún no reconoce `node` o `pnpm`, usa el comando según tu tipo de terminal:
+
+- **En PowerShell:**
+  ```powershell
+  $env:PATH = "C:\laragon\bin\nodejs\node-v22;$env:PATH"
+  ```
+- **En CMD / Cmder (símbolo `λ`):**
+  ```cmd
+  set PATH=C:\laragon\bin\nodejs\node-v22;%PATH%
+  ```
+
+> **Tip en Windows (Permisos de Scripts de PowerShell):**
+> Si PowerShell bloquea scripts (`.ps1`), ejecuta una sola vez:
+> ```powershell
+> Set-ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+> ```
+
+---
+
+### 3. Instalar dependencias del proyecto
+
+Dado que `pnpm` es el gestor recomendado por su velocidad y ahorro de espacio en disco:
+
+```bash
+# Con pnpm (recomendado)
+pnpm install
+
+# Si pnpm solicita aprobación de scripts de compilación de binarios (electron):
+pnpm approve-builds --all
 ```
 
-### 3. Iniciar la aplicación
-```powershell
+*(Alternativa tradicional con npm)*:
+```bash
+npm install
+```
+
+---
+
+### 4. Iniciar la aplicación en modo desarrollo
+
+```bash
+# Con pnpm
+pnpm start
+
+# Con npm
 npm start
 ```
 
-*(La ventana de la aplicación se abrirá inmediatamente)*.
+*(La ventana de la aplicación de escritorio se abrirá inmediatamente)*.
+
+---
+
+### 5. Compilar el instalador (.exe / portable) para distribución
+
+Para compilar el archivo instalador NSIS y la versión portable para Windows (x64) en la carpeta `dist/`:
+
+```bash
+# Con pnpm
+pnpm run dist
+
+# Con npm
+npm run dist
+```
 
 ---
 
@@ -77,25 +133,3 @@ npm start
 - <kbd>Esc</kbd>: Limpiar la búsqueda o cerrar modales activos.
 
 ---
-
-## 📤 Instrucciones para Subir los Cambios a GitHub
-
-Para guardar y subir todo este trabajo a tu repositorio de GitHub (`https://github.com/A1exauri0/BuscadorArchivos.git`), ejecuta los siguientes comandos en tu terminal de PowerShell:
-
-```powershell
-# 1. Posicionarte en la carpeta de la aplicación
-cd c:\laragon\www\BuscadorArchivos
-
-# 2. Agregar todos los archivos al control de versiones
-git add .
-
-# 3. Crear el commit descriptivo
-git commit -m "feat: implementacion completa de buscador de archivos en electron con interfaz oscura premium y escaneo optimizado"
-
-# 4. Subir los cambios a la rama principal (main)
-git push origin main
-```
-
----
-
-*Desarrollado para el Instituto Registral y Catastral (IREC).*
